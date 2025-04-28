@@ -8,6 +8,8 @@ const connectDB = require("./config/db.js");
 // Routes Import
 const authUserRoutes = require("./routes/auth/user/index.js");
 const authAdminRoutes = require("./routes/auth/admin/index.js");
+const categoryRoutes = require("./routes/category/index.js");
+const productRoutes = require("./routes/product/index.js");
 
 // Connect DB
 connectDB();
@@ -23,10 +25,12 @@ app.use(morgan("dev"));
 // Routes
 app.use("/api/auth/admin", authAdminRoutes);
 app.use("/api/auth/user", authUserRoutes);
+app.use("/api/category", categoryRoutes);
+app.use("/api/product", productRoutes);
 
 // Default Route
 app.use("/", (req, res) => {
-  res.json({ message: "Invalid route" });
+  res.json({ message: "API WORKING" });
 });
 
 app.use((req, res) => res.status(404).json({ message: "Route not found" }));

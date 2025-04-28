@@ -1,5 +1,5 @@
 const fs = require("fs/promises");
-const { cloudinary_js_config } = require("../../config/cloudniary.js");
+const { cloudinary_js_config } = require("../../config/cloudinary");
 
 exports.uploadSingleFile = async (filePath, folder = "") => {
   try {
