@@ -9,7 +9,11 @@ const connectDB = require("./config/db.js");
 const authUserRoutes = require("./routes/auth/user/index.js");
 const authAdminRoutes = require("./routes/auth/admin/index.js");
 const categoryRoutes = require("./routes/category/index.js");
+const brandRoutes = require("./routes/brand/index.js");
 const productRoutes = require("./routes/product/index.js");
+const cartRoutes = require("./routes/cart/index.js");
+const reviewsRoutes = require("./routes/reviews/index.js");
+const addressRoutes = require("./routes/address/index.js");
 
 // Connect DB
 connectDB();
@@ -26,7 +30,11 @@ app.use(morgan("dev"));
 app.use("/api/auth/admin", authAdminRoutes);
 app.use("/api/auth/user", authUserRoutes);
 app.use("/api/category", categoryRoutes);
+app.use("/api/brand", brandRoutes);
 app.use("/api/product", productRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/reviews", reviewsRoutes);
+app.use("/api/reviews", addressRoutes);
 
 // Default Route
 app.use("/", (req, res) => {
