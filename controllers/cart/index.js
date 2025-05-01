@@ -5,9 +5,8 @@ const mongoose = require("mongoose");
 
 const getCart = asyncHandler(async (req, res) => {
   const { user_id } = req.query;
-  const { role } = req.user;
 
-  const cart = await CartService.getCart({ user_id , role});
+  const cart = await CartService.getCart({ user_id });
   const data = {
     cart: cart,
     total: !user_id ? cart.length : cart ? 1 : 0,
