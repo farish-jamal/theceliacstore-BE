@@ -4,6 +4,8 @@ const cors = require("cors");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db.js");
+const swaggerSpec = require("./swagger.js");
+const swaggerUI = require("swagger-ui-express");
 
 // Routes Import
 const authUserRoutes = require("./routes/auth/user/index.js");
@@ -35,6 +37,8 @@ app.use("/api/product", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/reviews", reviewsRoutes);
 app.use("/api/reviews", addressRoutes);
+
+app.use("/api-doc", swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
 // Default Route
 app.use("/", (req, res) => {
