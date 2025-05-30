@@ -5,6 +5,7 @@ const { storage } = require("../../config/multer.js");
 const {
   admin,
   adminOrSubAdmin,
+  adminOrSubAdminOrSuperAdmin,
 } = require("../../middleware/auth/adminMiddleware.js");
 const router = express.Router();
 
