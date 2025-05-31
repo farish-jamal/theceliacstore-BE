@@ -1,4 +1,4 @@
-const ContactForm = require("../../models/contact");
+const ContactForm = require("../../models/contactUsModel");
 
 const createNewForm = async (name, email, subject) => {
   return await ContactForm.create({

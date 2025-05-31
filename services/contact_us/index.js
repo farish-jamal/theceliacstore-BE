@@ -1,4 +1,4 @@
-const ContactForm = require("../../models/contact.js");
+const ContactForm = require("../../models/contactUsModel.js");
 const ApiResponse = require("../../utils/ApiResponse.js");
 const ContactRepositories = require("../../repositories/contact/index.js")
 

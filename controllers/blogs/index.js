@@ -12,16 +12,10 @@ const postBlogs = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(404, null, "Not authorized"));
   }
 
-  const { title, short_description, content, service, is_featured } = req.body;
+  const { title, short_description, content, is_featured } = req.body;
   const bannerImageFile = req.file;
 
-  if (
-    !title ||
-    !short_description ||
-    !content ||
-    !bannerImageFile ||
-    !service
-  ) {
+  if (!title || !short_description || !content || !bannerImageFile) {
     throw new ApiResponse(404, null, "Required Filled are missing", false);
   }
 
@@ -35,7 +29,6 @@ const postBlogs = asyncHandler(async (req, res) => {
     short_description,
     content,
     banner_image_url,
-    service,
     is_featured,
     adminId
   );

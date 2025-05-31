@@ -9,7 +9,6 @@ const getAllBlogs = async ({ filters, page, per_page }) => {
 
   const blogs = await Blog.find(filters)
     .populate("author", "-password")
-    .populate("service")
     .skip(skip)
     .sort({ createdAt: -1 })
     .limit(per_page);

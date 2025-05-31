@@ -7,7 +7,6 @@ const addNewBlog = async (
   short_description,
   content,
   banner_image_url,
-  service,
   is_featured,
   adminId
 ) => {
@@ -17,7 +16,6 @@ const addNewBlog = async (
     content,
     banner_image_url,
     published: true,
-    service,
     is_featured,
     author: adminId,
   };

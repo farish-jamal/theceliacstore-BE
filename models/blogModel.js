@@ -26,11 +26,6 @@ const BlogSchema = new mongoose.Schema(
       ref: "Admin",
       required: true,
     },
-    service: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Services",
-      required: true,
-    },
     published: {
       type: Boolean,
       default: false,
