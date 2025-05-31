@@ -82,10 +82,10 @@ const ProductSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    category: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "Category",
-      default: [],
+    sub_category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SubCategory",
+      required: true,
     },
     created_by_admin: {
       type: mongoose.Schema.Types.ObjectId,
