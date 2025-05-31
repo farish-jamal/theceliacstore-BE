@@ -27,6 +27,23 @@ const ProductSchema = new mongoose.Schema(
         message: "Discounted price must be a non-negative number or null",
       },
     },
+    tags: {
+      type: [String],
+      enum: [
+        "no_palm_oil",
+        "organic",
+        "no_gmo",
+        "no_aritificial_flavors",
+        "vegan",
+        "sugar_free",
+        "gluten_free",
+        "soya_free",
+        "no_preservatives",
+        "lactose_free",
+        "no_flavor_enhancer",
+      ], 
+      default: [],
+    },
     salesperson_discounted_price: {
       type: mongoose.Schema.Types.Decimal128,
       default: null,
