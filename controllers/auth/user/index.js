@@ -31,8 +31,9 @@ const getAllUsers = asyncHandler(async (req, res) => {
 });
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, phone, password } = req.body;
   const userExists = await User.findOne({ email });
+  const phoneExists = await User.findOne({ phone });
 
   if (userExists) {
     return res
@@ -40,9 +41,16 @@ const registerUser = asyncHandler(async (req, res) => {
       .json(new ApiResponse(400, null, "User already exists", false));
   }
 
+  if (phoneExists) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Phone number already exists", false));
+  }
+
   const user = await User.create({
     name,
     email,
+    phone,
     password,
   });
 
@@ -75,6 +83,7 @@ const loginUser = asyncHandler(async (req, res) => {
     name: user.name,
     email: user.email,
     token: accessToken,
+    phone: user.phone,
   };
 
   res.json(new ApiResponse(200, data, "User login successful", true));
