@@ -7,7 +7,7 @@ const getAllProducts = async ({
   page,
   per_page,
   service_id,
-  category_id,
+  sub_category_id,
   is_best_seller,
   search,
   price_range,
@@ -16,7 +16,7 @@ const getAllProducts = async ({
   return await ProductsRepository.getAllProducts({
     page,
     per_page,
-    category_id,
+    sub_category_id,
     service_id,
     is_best_seller,
     search,
@@ -63,26 +63,26 @@ const bulkCreateProducts = async (products, adminId) => {
 
   for (const [index, productData] of products.entries()) {
     try {
-      if (!productData.name || !productData.price || !productData.category) {
-        throw new Error("Missing required fields (name, price, or category)");
+      if (!productData.name || !productData.price || !productData.sub_category) {
+        throw new Error("Missing required fields (name, price, or sub_category)");
       }
 
-      const isValidCategory = await Category.exists({
-        _id: { $in: productData.category },
+      const isValidSubCategory = await Category.exists({
+        _id: { $in: productData.sub_category },
       });
 
-      if (!isValidCategory) {
-        throw new Error("Invalid category ID(s)");
+      if (!isValidSubCategory) {
+        throw new Error("Invalid Sub sub category ID(s)");
       }
 
       const existingProduct = await Product.findOne({
         name: productData.name,
-        category: productData.category,
+        sub_category: productData.sub_category,
       });
 
       if (existingProduct) {
         throw new Error(
-          "Duplicate product: Product with the same name and category already exists."
+          "Duplicate product: Product with the same name and subcategory already exists."
         );
       }
 

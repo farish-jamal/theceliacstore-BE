@@ -6,7 +6,7 @@ const getAllProducts = async ({
   page,
   per_page,
   service_id,
-  category_id,
+  sub_category_id,
   is_best_seller,
   search,
   price_range,
@@ -34,17 +34,17 @@ const getAllProducts = async ({
       const serviceCategories = await Category.find({
         service: { $in: serviceObjectIds },
       });
-      serviceCategoryIds = serviceCategories.map((category) =>
-        category._id.toString()
+      serviceCategoryIds = serviceCategories.map((sub_category) =>
+        sub_category._id.toString()
       );
     }
   }
 
   let finalCategoryIds = [
     ...new Set([
-      ...(Array.isArray(category_id)
-        ? category_id
-        : [category_id].filter(Boolean)),
+      ...(Array.isArray(sub_category_id)
+        ? sub_category_id
+        : [sub_category_id].filter(Boolean)),
       ...serviceCategoryIds,
     ]),
   ];
@@ -55,10 +55,10 @@ const getAllProducts = async ({
     filter.category = { $in: finalCategoryIds };
   }
 
-  // if (Array.isArray(category_id) && category_id.length > 0) {
-  //   filter.category = { $in: category_id };
-  // } else if (category_id) {
-  //   filter.category = category_id;
+  // if (Array.isArray(sub_category_id) && sub_category_id.length > 0) {
+  //   filter.category = { $in: sub_category_id };
+  // } else if (sub_category_id) {
+  //   filter.category = sub_category_id;
   // }
 
   if (is_best_seller) {
