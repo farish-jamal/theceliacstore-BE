@@ -24,6 +24,8 @@ const getBundleById = asyncHandler(async (req, res) => {
 
 const createBundle = asyncHandler(async (req, res) => {
   let imageUrls = [];
+
+  console.log(req.admin);
   if (req.files && req.files.length > 0) {
     imageUrls = await uploadMultipleFiles(req.files, "uploads/images");
   }
@@ -34,6 +36,7 @@ const createBundle = asyncHandler(async (req, res) => {
   if (bundleData?.meta_data) {
     bundleData.meta_data = JSON.parse(bundleData.meta_data);
   }
+  bundleData.created_by_admin = req.admin._id;
   const bundle = await BundleService.createBundle(bundleData);
   res.json(new ApiResponse(201, bundle, "Bundle created successfully", true));
 });
@@ -52,14 +55,18 @@ const updateBundle = asyncHandler(async (req, res) => {
     try {
       bundleData.meta_data = JSON.parse(bundleData.meta_data);
     } catch (error) {
-      return res.json(new ApiResponse(400, null, "Invalid meta_data format", false));
+      return res.json(
+        new ApiResponse(400, null, "Invalid meta_data format", false)
+      );
     }
   }
   const updatedBundle = await BundleService.updateBundle(id, bundleData);
   if (!updatedBundle) {
     return res.json(new ApiResponse(404, null, "Bundle not found", false));
   }
-  res.json(new ApiResponse(200, updatedBundle, "Bundle updated successfully", true));
+  res.json(
+    new ApiResponse(200, updatedBundle, "Bundle updated successfully", true)
+  );
 });
 
 const deleteBundle = asyncHandler(async (req, res) => {
