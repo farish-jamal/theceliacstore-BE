@@ -3,7 +3,6 @@ const router = express.Router();
 const OrderController = require("../../controllers/order/index.js");
 const { user } = require("../../middleware/auth/userMiddleware.js");
 const {
-  superAdmin,
   adminOrSuperAdmin,
 } = require("../../middleware/auth/adminMiddleware.js");
 

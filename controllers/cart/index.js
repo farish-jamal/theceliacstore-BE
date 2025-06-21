@@ -16,10 +16,15 @@ const getCart = asyncHandler(async (req, res) => {
 });
 
 const addToCart = asyncHandler(async (req, res) => {
-  const { user_id, product_id, quantity } = req.body;
-  const { role } = req.user;
+  const { product_id, quantity } = req.body;
+  const { role, _id } = req.user;
 
-  const cartItem = await CartService.updateCart(user_id, product_id, quantity, role);
+  const cartItem = await CartService.updateCart(
+    _id,
+    product_id,
+    quantity,
+    role
+  );
   res.json(
     new ApiResponse(201, cartItem, "Item added to cart successfully", true)
   );
