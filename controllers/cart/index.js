@@ -8,7 +8,7 @@ const getCart = asyncHandler(async (req, res) => {
 
   const cart = await CartService.getCart({ user_id });
   const data = {
-    cart: cart,
+    data: cart,
     total: !user_id ? cart.length : cart ? 1 : 0,
   };
 
