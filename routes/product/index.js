@@ -22,10 +22,7 @@ router.get("/:id", ProductsController.getProductById);
 router.put(
   "/:id",
   adminOrSuperAdmin,
-  upload.fields([
-    { name: "banner_image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  upload.any(),
   ProductsController.updateProduct
 );
 router.delete("/:id", adminOrSuperAdmin, ProductsController.deleteProduct);

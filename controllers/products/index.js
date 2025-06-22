@@ -130,17 +130,59 @@ const updateProduct = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(404, null, "Product not found", false));
   }
 
-  const images = req.files?.images || [];
-  const bannerImageFile = req.files?.banner_image?.[0];
+  const files = req.files || [];
+  // Handle product images: keep URLs, upload only new files
+  let productImages = [];
+  if (req.body.images) {
+    let imagesArr = req.body.images;
+    if (typeof imagesArr === "string") {
+      try {
+        imagesArr = JSON.parse(imagesArr);
+      } catch {
+        imagesArr = [imagesArr];
+      }
+    }
+    productImages = await Promise.all(
+      imagesArr.map(async (img, idx) => {
+        if (img && typeof img === "object" && img.path) {
+          // File object (shouldn't happen with upload.any, but for safety)
+          return await uploadSingleFile(img.path, "uploads/images");
+        } else if (typeof img === "string" && img.startsWith("http")) {
+          return img;
+        } else {
+          // Check if a file was uploaded for this index
+          const file = files.find(
+            (f) => f.fieldname === `images` && f.originalname === img
+          );
+          if (file) {
+            return await uploadSingleFile(file.path, "uploads/images");
+          }
+        }
+        return null;
+      })
+    );
+    productImages = productImages.filter(Boolean);
+  } else {
+    // If no images in body, check for uploaded files
+    const imageFiles = files.filter((f) => f.fieldname === "images");
+    productImages =
+      imageFiles.length > 0
+        ? await uploadMultipleFiles(imageFiles, "uploads/images")
+        : product.images || [];
+  }
 
-  const imageUrls = images.length
-    ? await uploadMultipleFiles(images, "uploads/images")
-    : [];
-
-  const bannerImageUrl = await uploadSingleFile(
-    bannerImageFile.path,
-    "uploads/images"
-  );
+  // Banner image: keep URL if string, upload if file
+  let bannerImageUrl = product.banner_image;
+  const bannerImageFile = files.find((f) => f.fieldname === "banner_image");
+  if (bannerImageFile) {
+    bannerImageUrl = await uploadSingleFile(bannerImageFile.path, "uploads/images");
+  } else if (
+    req.body.banner_image &&
+    typeof req.body.banner_image === "string" &&
+    req.body.banner_image.startsWith("http")
+  ) {
+    bannerImageUrl = req.body.banner_image;
+  }
 
   let { meta_data, variants } = req.body;
 
@@ -154,7 +196,6 @@ const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  // Handle variants: parse if string, else use as is
   if (variants && typeof variants === "string") {
     try {
       variants = JSON.parse(variants);
@@ -164,31 +205,55 @@ const updateProduct = asyncHandler(async (req, res) => {
       );
     }
   }
-  // For each variant, parse images if string
+
+  // For each variant, keep URLs, upload only new files
   if (Array.isArray(variants)) {
     variants = await Promise.all(
-      variants.map(async (variant) => {
-        if (Array.isArray(variant.images) && variant.images.length) {
-          variant.images = await uploadMultipleFiles(
-            variant.images,
-            "uploads/images"
+      variants.map(async (variant, idx) => {
+        let variantImages = [];
+        if (variant.images) {
+          let vImgs = variant.images;
+          if (typeof vImgs === "string") {
+            try {
+              vImgs = JSON.parse(vImgs);
+            } catch {
+              vImgs = [vImgs];
+            }
+          }
+          variantImages = await Promise.all(
+            vImgs.map(async (img, vIdx) => {
+              if (img && typeof img === "object" && img.path) {
+                return await uploadSingleFile(img.path, "uploads/images");
+              } else if (typeof img === "string" && img.startsWith("http")) {
+                return img;
+              } else {
+                // Check if a file was uploaded for this variant image
+                const file = files.find(
+                  (f) =>
+                    f.fieldname === `variants[${idx}][images]` &&
+                    f.originalname === img
+                );
+                if (file) {
+                  return await uploadSingleFile(file.path, "uploads/images");
+                }
+              }
+              return null;
+            })
           );
+          variantImages = variantImages.filter(Boolean);
         } else {
-          variant.images = [];
+          // If no images in body, check for uploaded files
+          const variantImageFiles = files.filter(
+            (f) => f.fieldname === `variants[${idx}][images]`
+          );
+          variantImages =
+            variantImageFiles.length > 0
+              ? await uploadMultipleFiles(variantImageFiles, "uploads/images")
+              : variant.images || [];
         }
-        return variant;
+        return { ...variant, images: variantImages };
       })
     );
-  }
-
-  // Handle product images: parse if string, else use as is
-  let productImages = imageUrls;
-  if (req.body.images && typeof req.body.images === "string") {
-    try {
-      productImages = JSON.parse(req.body.images);
-    } catch (error) {
-      productImages = [req.body.images];
-    }
   }
 
   const productData = {
