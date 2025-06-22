@@ -110,6 +110,14 @@ ProductSchema.set("toJSON", {
     if (ret.price) ret.price = parseFloat(ret.price.toString());
     if (ret.discounted_price)
       ret.discounted_price = parseFloat(ret.discounted_price.toString());
+    // Convert variant prices to numbers
+    if (Array.isArray(ret.variants)) {
+      ret.variants = ret.variants.map(variant => ({
+        ...variant,
+        price: variant.price ? parseFloat(variant.price.toString()) : variant.price,
+        discounted_price: variant.discounted_price ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price,
+      }));
+    }
     return ret;
   },
 });

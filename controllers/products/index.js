@@ -51,8 +51,9 @@ const getProductById = asyncHandler(async (req, res) => {
 });
 
 const createProduct = asyncHandler(async (req, res) => {
-  const images = req.files?.images || [];
-  const bannerImageFile = req.files?.banner_image?.[0];
+  const files = req.files || [];
+  const images = files.filter((f) => f.fieldname === "images");
+  const bannerImageFile = files.find((f) => f.fieldname === "banner_image");
 
   if (!images.length && !bannerImageFile) {
     return res.json(new ApiResponse(404, null, "No Images Found", false));
@@ -62,10 +63,9 @@ const createProduct = asyncHandler(async (req, res) => {
     ? await uploadMultipleFiles(images, "uploads/images")
     : [];
 
-  const bannerImageUrl = await uploadSingleFile(
-    bannerImageFile.path,
-    "uploads/images"
-  );
+  const bannerImageUrl = bannerImageFile
+    ? await uploadSingleFile(bannerImageFile.path, "uploads/images")
+    : null;
 
   let { meta_data, variants } = req.body;
 
@@ -79,12 +79,25 @@ const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  if (variants && typeof variants === "string") {
+    try {
+      variants = JSON.parse(variants);
+    } catch (error) {
+      return res.json(
+        new ApiResponse(400, null, "Invalid variants format", false)
+      );
+    }
+  }
+
   if (Array.isArray(variants)) {
     variants = await Promise.all(
-      variants.map(async (variant) => {
-        if (Array.isArray(variant.images) && variant.images.length) {
+      variants.map(async (variant, idx) => {
+        const variantImageFiles = files.filter(
+          (f) => f.fieldname === `variants[${idx}][images]`
+        );
+        if (variantImageFiles.length) {
           variant.images = await uploadMultipleFiles(
-            variant.images,
+            variantImageFiles,
             "uploads/images"
           );
         } else {
@@ -94,7 +107,7 @@ const createProduct = asyncHandler(async (req, res) => {
       })
     );
   }
-  
+
   const productData = {
     ...req.body,
     images: imageUrls,

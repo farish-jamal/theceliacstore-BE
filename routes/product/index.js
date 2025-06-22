@@ -12,10 +12,7 @@ const upload = multer({ storage: storage });
 router.post(
   "/",
   adminOrSuperAdmin,
-  upload.fields([
-    { name: "banner_image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  upload.any(),
   ProductsController.createProduct
 );
 router.get("/admin", adminOrSuperAdmin, ProductsController.getProductsByAdmin);
