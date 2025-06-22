@@ -13,21 +13,25 @@ const getAllProducts = asyncHandler(async (req, res) => {
     page = 1,
     per_page = 10,
     price_range,
-    service_id,
-    sub_category_id,
+    category,
+    rating,
+    sub_category,
     is_best_seller,
     search,
+    brands,
     sort_by = "created_at",
   } = req.query;
 
   const products = await ProductsServices.getAllProducts({
     page: parseInt(page, 10),
     per_page: parseInt(per_page, 10),
-    service_id,
-    sub_category_id,
+    category,
+    sub_category,
     is_best_seller,
     search,
+    rating,
     price_range,
+    brands,
     sort_by,
   });
   res.json(
@@ -175,7 +179,10 @@ const updateProduct = asyncHandler(async (req, res) => {
   let bannerImageUrl = product.banner_image;
   const bannerImageFile = files.find((f) => f.fieldname === "banner_image");
   if (bannerImageFile) {
-    bannerImageUrl = await uploadSingleFile(bannerImageFile.path, "uploads/images");
+    bannerImageUrl = await uploadSingleFile(
+      bannerImageFile.path,
+      "uploads/images"
+    );
   } else if (
     req.body.banner_image &&
     typeof req.body.banner_image === "string" &&

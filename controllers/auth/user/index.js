@@ -91,7 +91,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const updateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { name, email } = req.body;
+  const { name, email, phone } = req.body;
 
   const user = await User.findById(id);
   if (!user) {
@@ -102,9 +102,10 @@ const updateUser = asyncHandler(async (req, res) => {
 
   if (name) user.name = name;
   if (email) user.email = email;
+  if (phone) user.phone = phone;
 
   await user.save();
-  const updatedUser = await User.findById(id);
+  const updatedUser = await User.findById(id).select("-password");
 
   res.json(
     new ApiResponse(200, updatedUser, "User updated successfully", true)

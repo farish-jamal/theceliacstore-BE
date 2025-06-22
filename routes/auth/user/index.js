@@ -15,11 +15,11 @@ router.get("/", superAdmin, getAllUsers);
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/:id", getUserById);
+router.patch("/:id", updateUser);
 
 // router.post("/logout", logoutUser);
 
 // DEVELOPMENT API's
-router.patch("/:id", updateUser);
 router.delete("/:id", deleteUser);
 
 module.exports = router;

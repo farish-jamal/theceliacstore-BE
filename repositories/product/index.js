@@ -1,86 +1,62 @@
-const Category = require("../../models/categoryModel");
 const Product = require("../../models/productsModel");
-const mongoose = require("mongoose");
+const SubCategory = require("../../models/subCategoryModel");
 
 const getAllProducts = async ({
   page,
   per_page,
-  service_id,
-  sub_category_id,
+  category,
+  sub_category,
   is_best_seller,
   search,
+  rating,
   price_range,
+  brands,
   sort_by,
 }) => {
   const skip = (page - 1) * per_page;
+  const match = {};
 
-  const filter = {};
-
-  let serviceCategoryIds = [];
-
-  if (service_id) {
-    const services = Array.isArray(service_id)
-      ? service_id
-      : service_id.split(",");
-    const serviceObjectIds = services
-      .map((s) =>
-        mongoose.isValidObjectId(s)
-          ? mongoose.Types.ObjectId.createFromHexString(s)
-          : null
-      )
-      .filter(Boolean);
-
-    if (serviceObjectIds.length > 0) {
-      const serviceCategories = await Category.find({
-        service: { $in: serviceObjectIds },
-      });
-      serviceCategoryIds = serviceCategories.map((sub_category) =>
-        sub_category._id.toString()
+  let subCategoryIds = [];
+  if (category) {
+    const subCats = await SubCategory.find({ category: category }, "_id");
+    subCategoryIds = subCats.map((sc) => sc._id);
+    if (sub_category) {
+      const subCatArray = Array.isArray(sub_category)
+        ? sub_category
+        : [sub_category];
+      subCategoryIds = subCategoryIds.filter((id) =>
+        subCatArray.includes(id.toString())
       );
     }
+    if (subCategoryIds.length > 0) {
+      match.sub_category = { $in: subCategoryIds };
+    } else {
+      return { data: [], total: 0 };
+    }
+  } else if (sub_category) {
+    match.sub_category = Array.isArray(sub_category)
+      ? { $in: sub_category }
+      : sub_category;
   }
-
-  let finalCategoryIds = [
-    ...new Set([
-      ...(Array.isArray(sub_category_id)
-        ? sub_category_id
-        : [sub_category_id].filter(Boolean)),
-      ...serviceCategoryIds,
-    ]),
-  ];
-
-  console.log("finalCategoryIds", finalCategoryIds);
-
-  if (finalCategoryIds.length > 0) {
-    filter.category = { $in: finalCategoryIds };
-  }
-
-  // if (Array.isArray(sub_category_id) && sub_category_id.length > 0) {
-  //   filter.category = { $in: sub_category_id };
-  // } else if (sub_category_id) {
-  //   filter.category = sub_category_id;
-  // }
 
   if (is_best_seller) {
-    filter.is_best_seller = is_best_seller;
+    match.is_best_seller = is_best_seller;
   }
-
   if (search) {
-    filter.name = { $regex: search, $options: "i" };
+    match.name = { $regex: search, $options: "i" };
   }
-
+  if (brands) {
+    match.brand = { $in: Array.isArray(brands) ? brands : [brands] };
+  }
   if (price_range) {
     const priceRanges = Array.isArray(price_range)
       ? price_range
       : [price_range];
-
     let minPrice = Infinity;
     let maxPrice = -Infinity;
-
     priceRanges.forEach((range) => {
       if (typeof range === "string") {
         const prices = range.split("_").map(Number);
-
         if (prices.length === 2 && !isNaN(prices[0]) && !isNaN(prices[1])) {
           minPrice = Math.min(minPrice, prices[0]);
           maxPrice = Math.max(maxPrice, prices[1]);
@@ -89,32 +65,72 @@ const getAllProducts = async ({
         }
       }
     });
-
     if (minPrice !== Infinity && maxPrice !== -Infinity) {
-      filter.price = { $gte: minPrice, $lte: maxPrice };
+      match.price = { $gte: minPrice, $lte: maxPrice };
     } else if (minPrice !== Infinity) {
-      filter.price = { $gte: minPrice };
+      match.price = { $gte: minPrice };
     }
   }
 
   let sortOptions = {};
-  if (sort_by === "asc") {
-    sortOptions = { price: 1 };
-  } else if (sort_by === "dec") {
-    sortOptions = { price: -1 };
-  } else {
-    sortOptions = { createdAt: -1 };
+  switch (sort_by) {
+    case "latest":
+    case "created_at":
+      sortOptions = { createdAt: -1 };
+      break;
+    case "high_to_low":
+      sortOptions = { price: -1 };
+      break;
+    case "low_to_high":
+      sortOptions = { price: 1 };
+      break;
+    default:
+      sortOptions = { createdAt: -1 };
   }
 
-  const products = await Product.find(filter)
-    .sort(sortOptions)
-    .skip(skip)
-    .limit(per_page);
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: "reviews",
+        localField: "_id",
+        foreignField: "productId",
+        as: "reviews",
+      },
+    },
+    {
+      $addFields: {
+        avgRating: { $avg: "$reviews.rating" },
+        reviewsCount: { $size: "$reviews" },
+      },
+    },
+  ];
 
-  const total = await Product.countDocuments(filter);
+  if (rating) {
+    pipeline.push({ $match: { avgRating: { $gte: Number(rating) } } });
+  }
+
+  pipeline.push({ $sort: sortOptions });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: per_page });
+
+  const products = await Product.aggregate(pipeline);
+
+  const countPipeline = pipeline.filter(
+    (stage) =>
+      !("$skip" in stage) && !("$limit" in stage) && !("$sort" in stage)
+  );
+  countPipeline.push({ $count: "total" });
+  const totalResult = await Product.aggregate(countPipeline);
+  const total = totalResult[0]?.total || 0;
+
+  const productsWithReviews = products.map((product) => ({
+    ...product,
+    reviews: product.reviews || [],
+  }));
 
   return {
-    data: products,
+    data: productsWithReviews,
     total,
   };
 };

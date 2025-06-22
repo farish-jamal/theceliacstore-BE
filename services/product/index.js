@@ -6,22 +6,26 @@ const Product = require("../../models/productsModel.js");
 const getAllProducts = async ({
   page,
   per_page,
-  service_id,
-  sub_category_id,
+  category,
+  sub_category,
   is_best_seller,
   search,
   price_range,
   sort_by,
+  rating,
+  brands
 }) => {
   return await ProductsRepository.getAllProducts({
     page,
     per_page,
-    sub_category_id,
-    service_id,
+    category,
+    sub_category,
     is_best_seller,
     search,
     price_range,
     sort_by,
+    rating,
+    brands
   });
 };
 
