@@ -89,8 +89,6 @@ const bulkCreateProducts = async (products, adminId) => {
       const priceFields = [
         "price",
         "discounted_price",
-        "salesperson_discounted_price",
-        "dnd_discounted_price",
       ];
 
       const processedProduct = { ...productData };

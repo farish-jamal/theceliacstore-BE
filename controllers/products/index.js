@@ -67,7 +67,7 @@ const createProduct = asyncHandler(async (req, res) => {
     "uploads/images"
   );
 
-  let { meta_data } = req.body;
+  let { meta_data, variants } = req.body;
 
   if (meta_data) {
     try {
@@ -79,12 +79,31 @@ const createProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  if (Array.isArray(variants)) {
+    variants = await Promise.all(
+      variants.map(async (variant) => {
+        if (Array.isArray(variant.images) && variant.images.length) {
+          variant.images = await uploadMultipleFiles(
+            variant.images,
+            "uploads/images"
+          );
+        } else {
+          variant.images = [];
+        }
+        return variant;
+      })
+    );
+  }
+  
   const productData = {
     ...req.body,
     images: imageUrls,
     banner_image: bannerImageUrl,
     meta_data,
+    variants,
   };
+
+  if (productData.inventory === undefined) productData.inventory = 0;
 
   const product = await ProductsServices.createProduct(productData);
   res.json(new ApiResponse(201, product, "Product created successfully", true));
@@ -110,7 +129,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     "uploads/images"
   );
 
-  let { meta_data } = req.body;
+  let { meta_data, variants } = req.body;
 
   if (meta_data) {
     try {
@@ -122,12 +141,53 @@ const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
+  // Handle variants: parse if string, else use as is
+  if (variants && typeof variants === "string") {
+    try {
+      variants = JSON.parse(variants);
+    } catch (error) {
+      return res.json(
+        new ApiResponse(400, null, "Invalid variants format", false)
+      );
+    }
+  }
+  // For each variant, parse images if string
+  if (Array.isArray(variants)) {
+    variants = await Promise.all(
+      variants.map(async (variant) => {
+        if (Array.isArray(variant.images) && variant.images.length) {
+          variant.images = await uploadMultipleFiles(
+            variant.images,
+            "uploads/images"
+          );
+        } else {
+          variant.images = [];
+        }
+        return variant;
+      })
+    );
+  }
+
+  // Handle product images: parse if string, else use as is
+  let productImages = imageUrls;
+  if (req.body.images && typeof req.body.images === "string") {
+    try {
+      productImages = JSON.parse(req.body.images);
+    } catch (error) {
+      productImages = [req.body.images];
+    }
+  }
+
   const productData = {
     ...req.body,
-    images: imageUrls,
+    images: productImages,
     banner_image: bannerImageUrl,
     meta_data,
+    variants,
   };
+
+  if (productData.inventory === undefined)
+    productData.inventory = product.inventory || 0;
 
   const updatedProduct = await ProductsServices.updateProduct(id, productData);
 

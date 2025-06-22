@@ -19,14 +19,6 @@ const OrderItemSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Decimal128,
         default: null
       },
-      salesperson_discounted_price: {
-        type: mongoose.Schema.Types.Decimal128,
-        default: null
-      },
-      dnd_discounted_price: {
-        type: mongoose.Schema.Types.Decimal128,
-        default: null
-      },
       banner_image: String
     }),
     required: true
@@ -84,12 +76,6 @@ OrderSchema.set("toJSON", {
           price: parseFloat(item.product.price.toString()),
           discounted_price: item.product.discounted_price
             ? parseFloat(item.product.discounted_price.toString())
-            : null,
-          salesperson_discounted_price: item.product.salesperson_discounted_price
-            ? parseFloat(item.product.salesperson_discounted_price.toString())
-            : null,
-          dnd_discounted_price: item.product.dnd_discounted_price
-            ? parseFloat(item.product.dnd_discounted_price.toString())
             : null
         }
       }));

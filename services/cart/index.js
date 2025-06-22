@@ -20,26 +20,12 @@ const updateCart = async (user_id, product_id, quantity, role) => {
   }
 
   let productPrice;
-  // const productPrice = parseFloat(
-  //   productData.discounted_price || productData.price
-  // );
 
-  if (role === "salesperson") {
-    productPrice =
-      productData.salesperson_discounted_price !== null
-        ? productData.salesperson_discounted_price
-        : productData.price;
-  } else if (role === "dnd") {
-    productPrice =
-      productData.dnd_discounted_price !== null
-        ? productData.dnd_discounted_price
-        : productData.price;
-  } else {
-    productPrice =
-      productData.discounted_price !== null
-        ? productData.discounted_price
-        : productData.price;
-  }
+
+  productPrice =
+    productData.discounted_price !== null
+      ? productData.discounted_price
+      : productData.price;
 
   if (!cart) {
     if (quantity > 0) {

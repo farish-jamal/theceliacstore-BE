@@ -44,29 +44,10 @@ const ProductSchema = new mongoose.Schema(
       ], 
       default: [],
     },
-    salesperson_discounted_price: {
-      type: mongoose.Schema.Types.Decimal128,
-      default: null,
-      validate: {
-        validator: function (value) {
-          return value === null || value >= 0;
-        },
-        message: "Discounted price must be a non-negative number or null",
-      },
-    },
-    dnd_discounted_price: {
-      type: mongoose.Schema.Types.Decimal128,
-      default: null,
-      validate: {
-        validator: function (value) {
-          return value === null || value >= 0;
-        },
-        message: "Discounted price must be a non-negative number or null",
-      },
-    },
-    instock: {
-      type: Boolean,
-      default: true,
+    inventory: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     manufacturer: {
       type: String,
@@ -109,6 +90,17 @@ const ProductSchema = new mongoose.Schema(
       ref: "Admin",
       required: true,
     },
+    variants: [
+      {
+        sku: { type: String, required: true },
+        name: { type: String }, // e.g., "100gm", "200gm"
+        attributes: { type: Map, of: String }, // e.g., { weight: "100gm" }
+        price: { type: mongoose.Schema.Types.Decimal128, required: true },
+        discounted_price: { type: mongoose.Schema.Types.Decimal128, default: null },
+        inventory: { type: Number, default: 0, min: 0 },
+        images: [String],
+      }
+    ],
   },
   { timestamps: true }
 );
@@ -118,14 +110,6 @@ ProductSchema.set("toJSON", {
     if (ret.price) ret.price = parseFloat(ret.price.toString());
     if (ret.discounted_price)
       ret.discounted_price = parseFloat(ret.discounted_price.toString());
-    if (ret.dnd_discounted_price)
-      ret.dnd_discounted_price = parseFloat(
-        ret.dnd_discounted_price.toString()
-      );
-    if (ret.salesperson_discounted_price)
-      ret.salesperson_discounted_price = parseFloat(
-        ret.salesperson_discounted_price.toString()
-      );
     return ret;
   },
 });
