@@ -22,11 +22,11 @@ const AddressSchema = new mongoose.Schema(
       required: true,
       maxlength: 20,
     },
-    locality: {
-      type: String,
-      required: true,
-      maxlength: 255,
-    },
+    // locality: {
+    //   type: String,
+    //   required: true,
+    //   maxlength: 255,
+    // },
     address: {
       type: String,
       required: true,
@@ -42,19 +42,19 @@ const AddressSchema = new mongoose.Schema(
       required: true,
       maxlength: 100,
     },
-    landmark: {
-      type: String,
-      maxlength: 255,
-    },
-    alternatePhone: {
-      type: String,
-      maxlength: 20,
-    },
-    addressType: {
-      type: String,
-      enum: ["home", "work", "other"],
-      required: true,
-    },
+    // landmark: {
+    //   type: String,
+    //   maxlength: 255,
+    // },
+    // alternatePhone: {
+    //   type: String,
+    //   maxlength: 20,
+    // },
+    // addressType: {
+    //   type: String,
+    //   enum: ["home", "work", "other"],
+    //   required: true,
+    // },
     isPrimary: {
       type: Boolean,
       default: false,

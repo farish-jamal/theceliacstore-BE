@@ -42,7 +42,7 @@ app.use("/api/brand", brandRoutes);
 app.use("/api/product", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/reviews", reviewsRoutes);
-app.use("/api/reviews", addressRoutes);
+app.use("/api/address", addressRoutes);
 app.use("/api/blogs", blogsRoutes);
 app.use("/api/contact-us", contactUsRoutes);
 app.use("/api/order", orderRoutes);

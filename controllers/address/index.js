@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const ApiResponse = require("../../utils/ApiResponse.js");
 const AddressServices = require("../../services/address/index.js");
 const { asyncHandler } = require("../../common/asyncHandler.js");
+  const Address = require("../../models/addressModel.js");
 
 const getAllAddresses = asyncHandler(async (req, res) => {
   const addresses = await AddressServices.getAllAddresses();
@@ -27,65 +28,95 @@ const getAddressById = asyncHandler(async (req, res) => {
 
 const getAddressByUserId = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  
-  // Validate user ID
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.json(new ApiResponse(400, null, "Invalid user ID", false));
   }
 
-  // Fetch addresses for the user
   const addresses = await AddressServices.getAddressesByUserId(id);
 
-  // Check if addresses exist
   if (!addresses || addresses.length === 0) {
     return res.json(
-      new ApiResponse(404, null, "No addresses found for this user", false)
+      new ApiResponse(404, [], "No addresses found for this user", false)
     );
   }
 
-  // Return the addresses
   res.json(
     new ApiResponse(200, addresses, "Addresses fetched successfully", true)
   );
 });
 
 const createAddress = asyncHandler(async (req, res) => {
-  const addressData = req.body;
+  const userId = req.user._id;
+  const { name, mobile, pincode, address, city, state, isPrimary } = req.body;
 
-  if (
-    !addressData.user ||
-    !addressData.name ||
-    !addressData.mobile ||
-    !addressData.pincode ||
-    !addressData.locality ||
-    !addressData.address ||
-    !addressData.city ||
-    !addressData.state ||
-    !addressData.addressType
-  ) {
+  if (!name || !mobile || !pincode || !address || !city || !state) {
     return res.json(
-      new ApiResponse(400, null, "Missing required fields", false)
+      new ApiResponse(400, null, "All required fields must be provided", false)
     );
   }
 
-  const address = await AddressServices.createAddress(addressData);
-  res.json(new ApiResponse(200, address, "Address created successfully", true));
+  const Address = require("../../models/addressModel.js");
+  const existingAddresses = await Address.find({ user: userId });
+  let finalIsPrimary = !!isPrimary;
+  if (existingAddresses.length === 0) {
+    finalIsPrimary = true;
+  } else if (isPrimary) {
+    await Address.updateMany(
+      { user: userId, isPrimary: true },
+      { isPrimary: false }
+    );
+  }
+
+  const createdAddress = await AddressServices.createAddress({
+    user: userId,
+    name,
+    mobile,
+    pincode,
+    address,
+    city,
+    state,
+    isPrimary: finalIsPrimary,
+  });
+  res.json(
+    new ApiResponse(200, createdAddress, "Address created successfully", true)
+  );
 });
 
 const updateAddress = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
   const { id } = req.params;
-  const addressData = req.body;
+  const { name, mobile, pincode, address, city, state, isPrimary } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.json(new ApiResponse(400, null, "Invalid address ID", false));
   }
 
-  const address = await AddressServices.updateAddress(id, addressData);
-  if (!address) {
+  const addressDoc = await Address.findOne({ _id: id, user: userId });
+  if (!addressDoc) {
     return res.json(new ApiResponse(404, null, "Address not found", false));
   }
 
-  res.json(new ApiResponse(200, address, "Address updated successfully", true));
+  // If isPrimary is being set to true, unset previous primary addresses for this user
+  if (isPrimary) {
+    await Address.updateMany(
+      { user: userId, isPrimary: true },
+      { isPrimary: false }
+    );
+  }
+
+  if (name !== undefined) addressDoc.name = name;
+  if (mobile !== undefined) addressDoc.mobile = mobile;
+  if (pincode !== undefined) addressDoc.pincode = pincode;
+  if (address !== undefined) addressDoc.address = address;
+  if (city !== undefined) addressDoc.city = city;
+  if (state !== undefined) addressDoc.state = state;
+  if (typeof isPrimary !== "undefined") addressDoc.isPrimary = !!isPrimary;
+
+  await addressDoc.save();
+
+  res.json(
+    new ApiResponse(200, addressDoc, "Address updated successfully", true)
+  );
 });
 
 const deleteAddress = asyncHandler(async (req, res) => {
