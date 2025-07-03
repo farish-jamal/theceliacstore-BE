@@ -41,7 +41,7 @@ const ProductSchema = new mongoose.Schema(
         "no_preservatives",
         "lactose_free",
         "no_flavor_enhancer",
-      ], 
+      ],
       default: [],
     },
     inventory: {
@@ -93,13 +93,16 @@ const ProductSchema = new mongoose.Schema(
     variants: [
       {
         sku: { type: String, required: true },
-        name: { type: String }, // e.g., "100gm", "200gm"
-        attributes: { type: Map, of: String }, // e.g., { weight: "100gm" }
+        name: { type: String },
+        attributes: { type: Map, of: String },
         price: { type: mongoose.Schema.Types.Decimal128, required: true },
-        discounted_price: { type: mongoose.Schema.Types.Decimal128, default: null },
+        discounted_price: {
+          type: mongoose.Schema.Types.Decimal128,
+          default: null,
+        },
         inventory: { type: Number, default: 0, min: 0 },
         images: [String],
-      }
+      },
     ],
   },
   { timestamps: true }
@@ -111,14 +114,31 @@ ProductSchema.set("toJSON", {
     if (ret.discounted_price)
       ret.discounted_price = parseFloat(ret.discounted_price.toString());
     if (Array.isArray(ret.variants)) {
-      ret.variants = ret.variants.map(variant => ({
+      ret.variants = ret.variants.map((variant) => ({
         ...variant,
-        price: variant.price ? parseFloat(variant.price.toString()) : variant.price,
-        discounted_price: variant.discounted_price ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price,
+        price: variant.price
+          ? parseFloat(variant.price.toString())
+          : variant.price,
+        discounted_price: variant.discounted_price
+          ? parseFloat(variant.discounted_price.toString())
+          : variant.discounted_price,
       }));
     }
     return ret;
   },
+});
+
+ProductSchema.pre("validate", function (next) {
+  if (Array.isArray(this.variants)) {
+    const skus = this.variants.map((v) => v.sku);
+    const uniqueSkus = new Set(skus);
+    if (skus.length !== uniqueSkus.size) {
+      return next(
+        new Error("Each variant sku must be unique within the product.")
+      );
+    }
+  }
+  next();
 });
 
 const Product = mongoose.model("Product", ProductSchema);

@@ -6,9 +6,20 @@ const BundleSchema = new mongoose.Schema(
     description: { type: String, maxlength: 2056 },
     products: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
-        required: true,
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+          required: true,
+        },
+        variant_sku: {
+          type: String,
+          required: false,
+        },
+        quantity: {
+          type: Number,
+          default: 1,
+          min: 1,
+        },
       },
     ],
     price: { type: mongoose.Schema.Types.Decimal128, required: true },
@@ -39,6 +50,19 @@ BundleSchema.set("toJSON", {
     if (ret.price) ret.price = parseFloat(ret.price.toString());
     if (ret.discounted_price)
       ret.discounted_price = parseFloat(ret.discounted_price.toString());
+    if (Array.isArray(ret.products)) {
+      ret.products = ret.products.map((entry) => {
+        if (entry && typeof entry === "object") {
+          if (entry.price && entry.price.toString) {
+            entry.price = parseFloat(entry.price.toString());
+          }
+          if (entry.discounted_price && entry.discounted_price.toString) {
+            entry.discounted_price = parseFloat(entry.discounted_price.toString());
+          }
+        }
+        return entry;
+      });
+    }
     return ret;
   },
 });

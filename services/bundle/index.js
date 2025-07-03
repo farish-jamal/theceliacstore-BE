@@ -1,10 +1,7 @@
 const BundleRepository = require("../../repositories/bundle/index.js");
 
-const getAllBundles = async ({ page = 1, per_page = 50, search = "" }) => {
-  const skip = (page - 1) * per_page;
-  const filter = {};
-  if (search) filter.name = { $regex: search, $options: "i" };
-  return await BundleRepository.getAllBundles(filter, skip, per_page);
+const getAllBundles = async (params) => {
+  return await BundleRepository.getAllBundles(params);
 };
 
 const getBundleById = async (id) => {

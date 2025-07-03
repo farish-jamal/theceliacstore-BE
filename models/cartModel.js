@@ -9,10 +9,23 @@ const CartSchema = new mongoose.Schema(
     },
     items: [
       {
+        type: {
+          type: String,
+          enum: ["product", "bundle"],
+          required: true,
+        },
         product: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
-          required: true,
+          required: function() { return this.type === "product"; },
+        },
+        bundle: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Bundle",
+          required: function() { return this.type === "bundle"; },
+        },
+        variant_sku: {
+          type: String,
         },
         quantity: {
           type: Number,
@@ -50,13 +63,11 @@ const CartSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ Auto-calculate total for each item before saving
 CartSchema.pre("save", function (next) {
   this.items.forEach((item) => {
     item.total = item.quantity * item.price;
   });
 
-  // ✅ Calculate total_price for the cart
   this.total_price = this.items.reduce((sum, item) => sum + item.total, 0);
 
   next();

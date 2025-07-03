@@ -3,6 +3,7 @@ const ApiResponse = require("../../utils/ApiResponse.js");
 const BundleService = require("../../services/bundle/index.js");
 const mongoose = require("mongoose");
 const { uploadMultipleFiles } = require("../../utils/upload/index.js");
+const Product = require("../../models/productsModel.js");
 
 const getAllBundles = asyncHandler(async (req, res) => {
   const { page = 1, per_page = 50, search = "" } = req.query;
@@ -25,17 +26,47 @@ const getBundleById = asyncHandler(async (req, res) => {
 const createBundle = asyncHandler(async (req, res) => {
   let imageUrls = [];
 
-  console.log(req.admin);
   if (req.files && req.files.length > 0) {
     imageUrls = await uploadMultipleFiles(req.files, "uploads/images");
   }
+
   let bundleData = { ...req.body };
+
   if (imageUrls.length > 0) {
     bundleData.images = imageUrls;
   }
+
   if (bundleData?.meta_data) {
     bundleData.meta_data = JSON.parse(bundleData.meta_data);
   }
+
+  if (bundleData.products) {
+    if (!Array.isArray(bundleData.products)) {
+      bundleData.products = [bundleData.products];
+    }
+    bundleData.products = bundleData.products.map((p) =>
+      typeof p === "string" ? JSON.parse(p) : p
+    );
+    for (const entry of bundleData.products) {
+      const productDoc = await Product.findById(entry.product).lean();
+      if (!productDoc) {
+        return res.json(new ApiResponse(400, null, `Product not found: ${entry.product}`, false));
+      }
+      if (Array.isArray(productDoc.variants) && productDoc.variants.length > 0) {
+        if (!entry.variant_sku) {
+          return res.json(new ApiResponse(400, null, `variant_sku is required for product with variants: ${productDoc.name}`, false));
+        }
+
+        const found = productDoc.variants.some(v => v.sku === entry.variant_sku);
+        if (!found) {
+          return res.json(new ApiResponse(400, null, `variant_sku '${entry.variant_sku}' not found in product: ${productDoc.name}`, false));
+        }
+      } else {
+        entry.variant_sku = undefined;
+      }
+    }
+  }
+
   bundleData.created_by_admin = req.admin._id;
   const bundle = await BundleService.createBundle(bundleData);
   res.json(new ApiResponse(201, bundle, "Bundle created successfully", true));
