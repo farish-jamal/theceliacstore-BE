@@ -4,7 +4,9 @@ const CartService = require("../../services/cart/index.js");
 const mongoose = require("mongoose");
 
 const getCart = asyncHandler(async (req, res) => {
-  const { user_id } = req.query;
+
+const user_id = req.user?._id
+console.log(req.user)
 
   const cart = await CartService.getCart({ user_id });
   const data = {

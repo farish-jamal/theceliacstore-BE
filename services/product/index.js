@@ -1,5 +1,5 @@
 const { default: mongoose } = require("mongoose");
-const Category = require("../../models/categoryModel.js");
+const SubCategory = require("../../models/subCategoryModel.js");
 const ProductsRepository = require("../../repositories/product/index.js");
 const Product = require("../../models/productsModel.js");
 
@@ -71,12 +71,13 @@ const bulkCreateProducts = async (products, adminId) => {
         throw new Error("Missing required fields (name, price, or sub_category)");
       }
 
-      const isValidSubCategory = await Category.exists({
-        _id: { $in: productData.sub_category },
+      // Validate sub_category as a single ObjectId, not an array
+      const isValidSubCategory = await SubCategory.exists({
+        _id: productData.sub_category,
       });
 
       if (!isValidSubCategory) {
-        throw new Error("Invalid Sub sub category ID(s)");
+        throw new Error("Invalid sub_category ID");
       }
 
       const existingProduct = await Product.findOne({

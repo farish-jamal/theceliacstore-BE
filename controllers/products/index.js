@@ -7,6 +7,7 @@ const {
   uploadSingleFile,
 } = require("../../utils/upload/index.js");
 const Product = require("../../models/productsModel.js");
+const XLSX = require("xlsx");
 
 const getAllProducts = asyncHandler(async (req, res) => {
   const {
@@ -333,6 +334,128 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
     .json(new ApiResponse(207, result, "Batch processing completed", true));
 });
 
+const os = require("os");
+const path = require("path");
+const fs = require("fs/promises");
+const { uploadPDF } = require("../../utils/upload/index.js");
+
+// Helper: Convert array of objects to CSV
+function convertToCSV(arr) {
+  if (!arr.length) return "";
+  const header = Object.keys(arr[0]).join(",");
+  const rows = arr.map((obj) =>
+    Object.values(obj)
+      .map((v) => (typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v))
+      .join(",")
+  );
+  return [header, ...rows].join("\n");
+}
+
+// Helper: Convert array of objects to XLSX using xlsx library
+function convertToXLSX(arr) {
+  const ws = XLSX.utils.json_to_sheet(arr);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Products");
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+const exportProducts = asyncHandler(async (req, res) => {
+  const fileType = req.query.fileType?.toLowerCase() || "xlsx";
+  const startDate = req.query.start_date
+    ? new Date(req.query.start_date)
+    : null;
+  const endDate = req.query.end_date ? new Date(req.query.end_date) : null;
+
+  const filter = {};
+  if (startDate && endDate) {
+    filter.createdAt = { $gte: startDate, $lte: endDate };
+  } else if (startDate) {
+    filter.createdAt = { $gte: startDate };
+  } else if (endDate) {
+    filter.createdAt = { $lte: endDate };
+  }
+
+  const products = await Product.find(filter).lean();
+  // Flatten variants for export
+  const serializedProducts = products.flatMap((p) => {
+    const { __v, _id, createdAt, updatedAt, variants, ...rest } = p;
+    if (Array.isArray(variants) && variants.length > 0) {
+      return variants.map((variant) => ({
+        id: p._id.toString(),
+        createdAt: createdAt?.toISOString(),
+        updatedAt: updatedAt?.toISOString(),
+        ...rest,
+        variant_sku: variant.sku,
+        variant_name: variant.name,
+        variant_attributes: JSON.stringify(variant.attributes || {}),
+        variant_price:
+          variant.price && variant.price.$numberDecimal
+            ? parseFloat(variant.price.$numberDecimal)
+            : variant.price,
+        variant_discounted_price:
+          variant.discounted_price && variant.discounted_price.$numberDecimal
+            ? parseFloat(variant.discounted_price.$numberDecimal)
+            : variant.discounted_price,
+        variant_inventory: variant.inventory,
+        variant_images: Array.isArray(variant.images)
+          ? variant.images.join("|")
+          : "",
+      }));
+    } else {
+      return [
+        {
+          id: p._id.toString(),
+          createdAt: createdAt?.toISOString(),
+          updatedAt: updatedAt?.toISOString(),
+          ...rest,
+          variant_sku: "",
+          variant_name: "",
+          variant_attributes: "",
+          variant_price: "",
+          variant_discounted_price: "",
+          variant_inventory: "",
+          variant_images: "",
+        },
+      ];
+    }
+  });
+
+  let buffer;
+  let mimeType = "";
+  let filename = `products_${Date.now()}.${fileType}`;
+
+  if (fileType === "csv") {
+    const content = convertToCSV(serializedProducts);
+    buffer = Buffer.from(content, "utf-8");
+    mimeType = "text/csv";
+  } else if (fileType === "xlsx") {
+    buffer = convertToXLSX(serializedProducts);
+    mimeType =
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  } else {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Unsupported file type", false));
+  }
+
+  const tempDir = os.tmpdir();
+  const tempFilePath = path.join(tempDir, filename);
+  await fs.writeFile(tempFilePath, buffer);
+
+  const url = await uploadPDF(tempFilePath, "exports");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { url, mimeType, filename },
+        "Products exported and uploaded successfully",
+        true
+      )
+    );
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -341,4 +464,5 @@ module.exports = {
   deleteProduct,
   getProductsByAdmin,
   bulkCreateProducts,
+  exportProducts,
 };
