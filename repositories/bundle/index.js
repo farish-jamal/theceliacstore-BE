@@ -90,13 +90,9 @@ const getAllBundles = async ({
     .limit(per_page)
     .lean();
 
-    console.log("Bundles fetched:", bundles);
-
   // Populate products and handle variants
   const populatedBundles = await Promise.all(
     bundles.map(async (bundle) => {
-      console.log("Processing bundle:",bundle, bundle._id);
-      // Fix: Always parse bundle.price and bundle.discounted_price to numbers
       let bundlePrice = bundle.price;
       let bundleDiscountedPrice = bundle.discounted_price;
       if (bundlePrice && bundlePrice.$numberDecimal) {
@@ -176,7 +172,6 @@ const getAllBundles = async ({
     })
   );
 
-  // For total count (without pagination)
   const total = await Bundle.countDocuments(match);
 
   return {
@@ -186,7 +181,12 @@ const getAllBundles = async ({
 };
 
 const getBundleById = async (id) => {
-  return await Bundle.findById(id).populate("products");
+  const bundle = await Bundle.findById(id).populate("products.product");
+  if (bundle) {
+    // Use toJSON to apply the transform and convert Decimal128 to numbers
+    return bundle.toJSON();
+  }
+  return bundle;
 };
 
 const createBundle = async (data) => {

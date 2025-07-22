@@ -47,9 +47,26 @@ const BundleSchema = new mongoose.Schema(
 
 BundleSchema.set("toJSON", {
   transform: (_, ret) => {
-    if (ret.price) ret.price = parseFloat(ret.price.toString());
-    if (ret.discounted_price)
-      ret.discounted_price = parseFloat(ret.discounted_price.toString());
+    if (ret.price) {
+      if (typeof ret.price === "object" && ret.price.$numberDecimal) {
+        ret.price = parseFloat(ret.price.$numberDecimal);
+      } else if (typeof ret.price === "object" && ret.price.toString) {
+        ret.price = parseFloat(ret.price.toString());
+      } else if (typeof ret.price === "string") {
+        ret.price = parseFloat(ret.price);
+      }
+    }
+    
+    if (ret.discounted_price) {
+      if (typeof ret.discounted_price === "object" && ret.discounted_price.$numberDecimal) {
+        ret.discounted_price = parseFloat(ret.discounted_price.$numberDecimal);
+      } else if (typeof ret.discounted_price === "object" && ret.discounted_price.toString) {
+        ret.discounted_price = parseFloat(ret.discounted_price.toString());
+      } else if (typeof ret.discounted_price === "string") {
+        ret.discounted_price = parseFloat(ret.discounted_price);
+      }
+    }
+
     if (Array.isArray(ret.products)) {
       ret.products = ret.products.map((entry) => {
         if (entry && typeof entry === "object") {

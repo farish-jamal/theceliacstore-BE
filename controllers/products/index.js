@@ -35,6 +35,37 @@ const getAllProducts = asyncHandler(async (req, res) => {
     brands,
     sort_by,
   });
+
+  // Convert Decimal128 to numbers for all products
+  if (products.data && Array.isArray(products.data)) {
+    products.data = products.data.map(product => {
+      const convertedProduct = {
+        ...product,
+        price: product.price && typeof product.price === 'object' && product.price.$numberDecimal 
+          ? parseFloat(product.price.$numberDecimal) 
+          : (product.price && typeof product.price === 'object' ? parseFloat(product.price.toString()) : product.price),
+        discounted_price: product.discounted_price && typeof product.discounted_price === 'object' && product.discounted_price.$numberDecimal
+          ? parseFloat(product.discounted_price.$numberDecimal)
+          : (product.discounted_price && typeof product.discounted_price === 'object' ? parseFloat(product.discounted_price.toString()) : product.discounted_price),
+      };
+
+      // Handle variants
+      if (Array.isArray(convertedProduct.variants)) {
+        convertedProduct.variants = convertedProduct.variants.map(variant => ({
+          ...variant,
+          price: variant.price && typeof variant.price === 'object' && variant.price.$numberDecimal
+            ? parseFloat(variant.price.$numberDecimal)
+            : (variant.price && typeof variant.price === 'object' ? parseFloat(variant.price.toString()) : variant.price),
+          discounted_price: variant.discounted_price && typeof variant.discounted_price === 'object' && variant.discounted_price.$numberDecimal
+            ? parseFloat(variant.discounted_price.$numberDecimal)
+            : (variant.discounted_price && typeof variant.discounted_price === 'object' ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price),
+        }));
+      }
+
+      return convertedProduct;
+    });
+  }
+
   res.json(
     new ApiResponse(200, products, "Products fetched successfully", true)
   );

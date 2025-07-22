@@ -64,11 +64,21 @@ const CartSchema = new mongoose.Schema(
 );
 
 CartSchema.pre("save", function (next) {
+  // Ensure all items have proper totals
   this.items.forEach((item) => {
-    item.total = item.quantity * item.price;
+    // Only recalculate total if we have both quantity and price, and price is not 0
+    if (item.quantity && item.price && item.price > 0) {
+      item.total = item.quantity * item.price;
+    }
+    // Update timestamps
+    item.updatedAt = new Date();
   });
 
-  this.total_price = this.items.reduce((sum, item) => sum + item.total, 0);
+  // Calculate total price
+  this.total_price = this.items.reduce((sum, item) => sum + (item.total || 0), 0);
+  
+  // Update cart active status
+  this.is_active = this.items.length > 0;
 
   next();
 });

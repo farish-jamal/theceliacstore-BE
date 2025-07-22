@@ -1,17 +1,26 @@
 const Cart = require("../../models/cartModel.js");
 const CartRepository = require("../../repositories/cart/index.js");
 const ProductRepository = require("../../repositories/product/index.js");
+const BundleRepository = require("../../repositories/bundle/index.js");
 const ApiResponse = require("../../utils/ApiResponse.js");
 
 const getCart = async ({ user_id }) => {
-  return await CartRepository.getCartByUserId({ user_id });
+  const cart = await CartRepository.getCartByUserId({ user_id });
+  return cart;
 };
 
-const updateCart = async ({ user_id, type, product_id, bundle_id, quantity, variant_sku, role }) => {
+const updateCart = async ({
+  user_id,
+  type,
+  product_id,
+  bundle_id,
+  quantity,
+  variant_sku,
+}) => {
   let cart = await CartRepository.getCartByUserId({ user_id });
 
   if (quantity < 0) {
-    throw new ApiResponse(400, null, "Invalid quantity", false);
+    throw new Error("Invalid quantity");
   }
 
   let itemData, itemPrice, item;
@@ -19,91 +28,198 @@ const updateCart = async ({ user_id, type, product_id, bundle_id, quantity, vari
   if (type === "product") {
     itemData = await ProductRepository.getProductById(product_id);
     if (!itemData) {
-      throw new ApiResponse(404, null, "Product not found", false);
+      throw new Error("Product not found");
     }
-    itemPrice = itemData.discounted_price !== null ? itemData.discounted_price : itemData.price;
+    itemPrice =
+      itemData.discounted_price !== null
+        ? itemData.discounted_price
+        : itemData.price;
     item = {
       type: "product",
       product: product_id,
       quantity,
       price: itemPrice,
       total: itemPrice * quantity,
+      addedAt: new Date(),
+      updatedAt: new Date(),
     };
     if (variant_sku) item.variant_sku = variant_sku;
   } else if (type === "bundle") {
-    // You may want to add bundle validation here
+    console.log(" >>>>>>>>>>>>>>", bundle_id);
+    itemData = await BundleRepository.getBundleById(bundle_id);
+
+    console.log("111111 >>>>>>>>>>>>>>>>", itemData);
+    if (!itemData) {
+      throw new Error("Bundle not found");
+    }
+
+    if (!itemData.is_active) {
+      throw new Error("Bundle is not available");
+    }
+
+    // Get the appropriate price (discounted if available, otherwise regular price)
+    let itemPrice =
+      itemData.discounted_price !== null &&
+      itemData.discounted_price !== undefined
+        ? itemData.discounted_price
+        : itemData.price;
+
+    // Debug: Log the price values
+    console.log("Bundle price debug:", {
+      bundleId: itemData._id,
+      bundleName: itemData.name,
+      originalPrice: itemData.price,
+      discountedPrice: itemData.discounted_price,
+      selectedPrice: itemPrice,
+      priceType: typeof itemPrice,
+    });
+
+    // Ensure itemPrice is a valid number
+    if (isNaN(itemPrice) || itemPrice <= 0) {
+      throw new Error("Invalid bundle price");
+    }
+
     item = {
       type: "bundle",
       bundle: bundle_id,
       quantity,
-      // price and total should be set after fetching bundle price
+      price: itemPrice,
+      total: itemPrice * quantity,
+      addedAt: new Date(),
+      updatedAt: new Date(),
     };
-    // TODO: Fetch bundle price and set item.price and item.total
-    // For now, set to 0 as placeholder
-    item.price = 0;
-    item.total = 0;
+
+    console.log("Created cart item:", item);
   } else {
-    throw new ApiResponse(400, null, "Invalid type. Must be 'product' or 'bundle'", false);
+    throw new Error("Invalid type. Must be 'product' or 'bundle'");
   }
 
   if (!cart) {
+    // If no cart exists and quantity is 0, return empty cart
+    if (quantity <= 0) {
+      return null;
+    }
+
     // Validate that every item has a type field if items array is present
     let itemsToAdd = [item];
     if (Array.isArray(itemsToAdd)) {
       itemsToAdd.forEach((itm, idx) => {
         if (!itm.type) {
-          throw new ApiResponse(400, null, `Cart item at index ${idx} is missing required 'type' field`, false);
+          throw new Error(
+            `Cart item at index ${idx} is missing required 'type' field`
+          );
         }
       });
     }
-    if (quantity > 0) {
-      cart = await CartRepository.addToCart({
-        user: user_id,
-        items: itemsToAdd,
-        total_price: item.total,
-        is_active: true,
-      });
-    }
-    cart = await Cart.findOne({ user: user_id }).populate(["items.product", "items.bundle"]);
-    return new ApiResponse(201, cart, "Cart created successfully", true);
+
+    cart = await CartRepository.addToCart({
+      user: user_id,
+      items: itemsToAdd,
+      total_price: item.total,
+      is_active: true,
+    });
+    // Fetch the created cart with populated fields
+    cart = await Cart.findOne({ user: user_id }).populate([
+      "items.product",
+      "items.bundle",
+    ]);
+    return cart;
   }
 
   let existingItemIndex = -1;
   if (type === "product") {
     existingItemIndex = cart.items.findIndex(
-      (i) => i.type === "product" && i.product && i.product.toString() === product_id && (!variant_sku || i.variant_sku === variant_sku)
+      (i) =>
+        i.type === "product" &&
+        i.product &&
+        (i.product.toString() === product_id ||
+          (typeof i.product === "object" &&
+            i.product._id &&
+            i.product._id.toString() === product_id)) &&
+        (!variant_sku || i.variant_sku === variant_sku)
     );
   } else if (type === "bundle") {
     existingItemIndex = cart.items.findIndex(
-      (i) => i.type === "bundle" && i.bundle && i.bundle.toString() === bundle_id
+      (i) =>
+        i.type === "bundle" &&
+        i.bundle &&
+        (i.bundle.toString() === bundle_id ||
+          (typeof i.bundle === "object" &&
+            i.bundle._id &&
+            i.bundle._id.toString() === bundle_id))
     );
   }
 
   if (existingItemIndex !== -1) {
     if (quantity > 0) {
+      // Update quantity and preserve the price from the new item
       cart.items[existingItemIndex].quantity = quantity;
-      cart.items[existingItemIndex].total = cart.items[existingItemIndex].price * quantity;
+      cart.items[existingItemIndex].price = item.price; // Preserve the correct price
+      cart.items[existingItemIndex].total = item.price * quantity;
+      cart.items[existingItemIndex].updatedAt = new Date();
+
+      console.log("Updated existing item:", {
+        type: cart.items[existingItemIndex].type,
+        quantity: cart.items[existingItemIndex].quantity,
+        price: cart.items[existingItemIndex].price,
+        total: cart.items[existingItemIndex].total,
+      });
     } else {
       cart.items.splice(existingItemIndex, 1);
     }
   } else if (quantity > 0) {
-    cart.items.push(item);
+    console.log("Before pushing item to cart:", JSON.stringify(item, null, 2));
+
+    // Create a new cart item object to ensure proper schema handling
+    const newCartItem = {
+      type: item.type,
+      quantity: item.quantity,
+      price: item.price,
+      total: item.total,
+      addedAt: item.addedAt,
+      updatedAt: item.updatedAt,
+    };
+
+    // Add bundle or product reference based on type
+    if (item.type === "bundle") {
+      newCartItem.bundle = item.bundle;
+    } else if (item.type === "product") {
+      newCartItem.product = item.product;
+      if (item.variant_sku) {
+        newCartItem.variant_sku = item.variant_sku;
+      }
+    }
+
+    cart.items.push(newCartItem);
+    console.log(
+      "After pushing item to cart:",
+      JSON.stringify(cart.items[cart.items.length - 1], null, 2)
+    );
   }
 
-  cart.total_price = cart.items.reduce((sum, i) => sum + (i.total || 0), 0);
-  cart.is_active = cart.items.length > 0;
+  // If no items left, delete the cart
+  if (cart.items.length === 0) {
+    await Cart.deleteOne({ user: user_id });
+    return null;
+  }
 
+  // The pre-save hook will handle total_price and is_active calculations
   await cart.save();
 
-  cart = await Cart.findOne({ user: user_id }).populate(["items.product", "items.bundle"]);
+  cart = await Cart.findOne({ user: user_id }).populate([
+    "items.product",
+    "items.bundle",
+  ]);
 
-  return new ApiResponse(200, cart, "Cart updated successfully", true);
+  console.log("Final cart after save:", JSON.stringify(cart, null, 2));
+
+  return cart;
 };
 
 const deleteCart = async (user_id) => {
   const deletedCart = await CartRepository.deleteCartByUserId(user_id);
   if (!deletedCart) {
-    throw new ApiResponse(404, null, "Cart not found", false);
+    throw new Error("Cart not found");
   }
   return deletedCart;
 };

@@ -7,14 +7,23 @@ const getCart = async () => {
 
 const getCartByUserId = async ({ user_id }) => {
   if (user_id) {
-    return await Cart.findOne({ user: user_id }).populate("items.product");
+    return await Cart.findOne({ user: user_id }).populate([
+      "items.product",
+      "items.bundle"
+    ]);
   }
 
-  return await Cart.find().populate("items.product");
+  return await Cart.find().populate([
+    "items.product",
+    "items.bundle"
+  ]);
 };
 
 const addToCart = async (data) => {
-  return await Cart.create(data);
+  console.log("CartRepository.addToCart - data:", JSON.stringify(data, null, 2));
+  const result = await Cart.create(data);
+  console.log("CartRepository.addToCart - result:", JSON.stringify(result, null, 2));
+  return result;
 };
 
 const updateCartItem = async (id, data) => {
