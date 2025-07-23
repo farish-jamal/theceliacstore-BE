@@ -39,8 +39,10 @@ const getAllProducts = async ({
       : sub_category;
   }
 
-  if (is_best_seller) {
-    match.is_best_seller = is_best_seller;
+  if (is_best_seller !== undefined && is_best_seller !== null) {
+    const bestSellerValue = is_best_seller === 'true' || is_best_seller === true;
+    match.is_best_seller = bestSellerValue;
+    console.log("is_best_seller filter applied:", bestSellerValue);
   }
   if (search) {
     match.name = { $regex: search, $options: "i" };
@@ -87,6 +89,8 @@ const getAllProducts = async ({
     default:
       sortOptions = { createdAt: -1 };
   }
+
+  console.log("match", match);
 
   const pipeline = [
     { $match: match },
