@@ -49,6 +49,10 @@ const OrderItemSchema = new mongoose.Schema({
   total_amount: {
     type: mongoose.Schema.Types.Decimal128,
     required: true
+  },
+  discounted_total_amount: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: true
   }
 });
 
@@ -77,6 +81,10 @@ const OrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Decimal128,
     required: true
   },
+  discountedTotalAmount: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: true
+  },
   status: {
     type: String,
     enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
@@ -86,8 +94,9 @@ const OrderSchema = new mongoose.Schema({
 
 OrderSchema.set("toJSON", {
   transform: (doc, ret) => {
-    // Convert totalAmount to number
+    // Convert totalAmount and discountedTotalAmount to number
     ret.totalAmount = parseFloat(ret.totalAmount.toString());
+    ret.discountedTotalAmount = parseFloat(ret.discountedTotalAmount.toString());
 
     // Ensure ret.items is an array before mapping
     if (Array.isArray(ret.items)) {
@@ -102,7 +111,8 @@ OrderSchema.set("toJSON", {
                 ? parseFloat(item.product.discounted_price.toString())
                 : null
             },
-            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined
+            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined,
+            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : undefined
           };
         } else if (item.type === "bundle" && item.bundle) {
           return {
@@ -114,7 +124,8 @@ OrderSchema.set("toJSON", {
                 ? parseFloat(item.bundle.discounted_price.toString())
                 : null
             },
-            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined
+            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined,
+            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : undefined
           };
         }
         return item;

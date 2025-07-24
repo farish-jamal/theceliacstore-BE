@@ -100,13 +100,18 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 
   let totalAmount = 0;
+  let discountedTotalAmount = 0;
   const orderItems = [];
   for (const cartItem of cart.items) {
     if (cartItem.type === "product") {
       const product = await Product.findById(cartItem.product);
       if (!product) continue;
-      const itemTotal = parseFloat(product.price.toString()) * cartItem.quantity;
+      const price = parseFloat(product.price.toString());
+      const discountedPrice = product.discounted_price ? parseFloat(product.discounted_price.toString()) : price;
+      const itemTotal = price * cartItem.quantity;
+      const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
+      discountedTotalAmount += discountedItemTotal;
       orderItems.push({
         type: "product",
         product: {
@@ -119,12 +124,17 @@ const createOrder = asyncHandler(async (req, res) => {
         },
         quantity: cartItem.quantity,
         total_amount: itemTotal,
+        discounted_total_amount: discountedItemTotal,
       });
     } else if (cartItem.type === "bundle") {
       const bundle = await Bundle.findById(cartItem.bundle);
       if (!bundle) continue;
-      const itemTotal = parseFloat(bundle.price.toString()) * cartItem.quantity;
+      const price = parseFloat(bundle.price.toString());
+      const discountedPrice = bundle.discounted_price ? parseFloat(bundle.discounted_price.toString()) : price;
+      const itemTotal = price * cartItem.quantity;
+      const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
+      discountedTotalAmount += discountedItemTotal;
       orderItems.push({
         type: "bundle",
         bundle: {
@@ -138,6 +148,7 @@ const createOrder = asyncHandler(async (req, res) => {
         },
         quantity: cartItem.quantity,
         total_amount: itemTotal,
+        discounted_total_amount: discountedItemTotal,
       });
     }
   }
@@ -154,6 +165,7 @@ const createOrder = asyncHandler(async (req, res) => {
     items: orderItems,
     address: addressSnapshot,
     totalAmount,
+    discountedTotalAmount,
     status: "pending",
   });
   await order.save();
