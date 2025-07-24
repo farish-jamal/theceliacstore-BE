@@ -6,6 +6,7 @@ const Address = require("../../models/addressModel");
 const Product = require("../../models/productsModel");
 const Order = require("../../models/orderModel");
 const Category = require("../../models/categoryModel");
+const Bundle = require("../../models/bundleModel");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -101,21 +102,44 @@ const createOrder = asyncHandler(async (req, res) => {
   let totalAmount = 0;
   const orderItems = [];
   for (const cartItem of cart.items) {
-    const product = await Product.findById(cartItem.product);
-    if (!product) continue;
-    const itemTotal = parseFloat(product.price.toString()) * cartItem.quantity;
-    totalAmount += itemTotal;
-    orderItems.push({
-      product: {
-        _id: product._id,
-        name: product.name,
-        price: product.price,
-        banner_image: product.banner_image,
-        sub_category: product.sub_category,
-      },
-      quantity: cartItem.quantity,
-      total_amount: itemTotal,
-    });
+    if (cartItem.type === "product") {
+      const product = await Product.findById(cartItem.product);
+      if (!product) continue;
+      const itemTotal = parseFloat(product.price.toString()) * cartItem.quantity;
+      totalAmount += itemTotal;
+      orderItems.push({
+        type: "product",
+        product: {
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          discounted_price: product.discounted_price,
+          banner_image: product.banner_image,
+          sub_category: product.sub_category,
+        },
+        quantity: cartItem.quantity,
+        total_amount: itemTotal,
+      });
+    } else if (cartItem.type === "bundle") {
+      const bundle = await Bundle.findById(cartItem.bundle);
+      if (!bundle) continue;
+      const itemTotal = parseFloat(bundle.price.toString()) * cartItem.quantity;
+      totalAmount += itemTotal;
+      orderItems.push({
+        type: "bundle",
+        bundle: {
+          _id: bundle._id,
+          name: bundle.name,
+          price: bundle.price,
+          discounted_price: bundle.discounted_price,
+          images: bundle.images,
+          description: bundle.description,
+          products: bundle.products,
+        },
+        quantity: cartItem.quantity,
+        total_amount: itemTotal,
+      });
+    }
   }
 
   const addressSnapshot = { ...address.toObject() };
