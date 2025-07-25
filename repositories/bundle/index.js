@@ -181,12 +181,95 @@ const getAllBundles = async ({
 };
 
 const getBundleById = async (id) => {
-  const bundle = await Bundle.findById(id).populate("products.product");
-  if (bundle) {
-    // Use toJSON to apply the transform and convert Decimal128 to numbers
-    return bundle.toJSON();
+  const bundle = await Bundle.findById(id).lean();
+  if (!bundle) {
+    return null;
   }
-  return bundle;
+
+  // Convert bundle prices
+  let bundlePrice = bundle.price;
+  let bundleDiscountedPrice = bundle.discounted_price;
+  if (bundlePrice && bundlePrice.$numberDecimal) {
+    bundlePrice = parseFloat(bundlePrice.$numberDecimal);
+  } else if (bundlePrice && bundlePrice.toString) {
+    bundlePrice = parseFloat(bundlePrice.toString());
+  }
+  if (bundleDiscountedPrice && bundleDiscountedPrice.$numberDecimal) {
+    bundleDiscountedPrice = parseFloat(bundleDiscountedPrice.$numberDecimal);
+  } else if (bundleDiscountedPrice && bundleDiscountedPrice.toString) {
+    bundleDiscountedPrice = parseFloat(bundleDiscountedPrice.toString());
+  }
+
+  // Populate products and handle variants
+  const populatedProducts = await Promise.all(
+    (bundle.products || []).map(async (entry) => {
+      const productDoc = await Product.findById(entry.product).lean();
+      if (!productDoc) return null;
+
+      let productPrice = productDoc.price;
+      let productDiscountedPrice = productDoc.discounted_price;
+      if (productPrice && productPrice.$numberDecimal) {
+        productPrice = parseFloat(productPrice.$numberDecimal);
+      } else if (productPrice && productPrice.toString) {
+        productPrice = parseFloat(productPrice.toString());
+      }
+      if (productDiscountedPrice && productDiscountedPrice.$numberDecimal) {
+        productDiscountedPrice = parseFloat(productDiscountedPrice.$numberDecimal);
+      } else if (productDiscountedPrice && productDiscountedPrice.toString) {
+        productDiscountedPrice = parseFloat(productDiscountedPrice.toString());
+      }
+
+      // Attach reviews
+      const reviews = await Product.aggregate([
+        { $match: { _id: productDoc._id } },
+        {
+          $lookup: {
+            from: "reviews",
+            localField: "_id",
+            foreignField: "productId",
+            as: "reviews",
+          },
+        },
+        {
+          $addFields: {
+            avgRating: { $avg: "$reviews.rating" },
+            reviewsCount: { $size: "$reviews" },
+          },
+        },
+      ]);
+      const productWithReviews = reviews[0] || productDoc;
+      productWithReviews.reviews = productWithReviews.reviews || [];
+      productWithReviews.price = productPrice;
+      productWithReviews.discounted_price = productDiscountedPrice;
+
+      // If variant_sku is present, attach only that variant
+      if (entry.variant_sku && Array.isArray(productDoc.variants)) {
+        const variant = productDoc.variants.find(v => v.sku === entry.variant_sku);
+        if (variant) {
+          variant.price = variant.price && variant.price.$numberDecimal ? parseFloat(variant.price.$numberDecimal) : (variant.price && variant.price.toString ? parseFloat(variant.price.toString()) : variant.price);
+          variant.discounted_price = variant.discounted_price && variant.discounted_price.$numberDecimal ? parseFloat(variant.discounted_price.$numberDecimal) : (variant.discounted_price && variant.discounted_price.toString ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price);
+          productWithReviews.selected_variant = variant;
+        }
+      }
+
+      if (Array.isArray(productWithReviews.variants)) {
+        productWithReviews.variants = productWithReviews.variants.map(variant => ({
+          ...variant,
+          price: variant.price && variant.price.$numberDecimal ? parseFloat(variant.price.$numberDecimal) : (variant.price && variant.price.toString ? parseFloat(variant.price.toString()) : variant.price),
+          discounted_price: variant.discounted_price && variant.discounted_price.$numberDecimal ? parseFloat(variant.discounted_price.$numberDecimal) : (variant.discounted_price && variant.discounted_price.toString ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price),
+        }));
+      }
+
+      return productWithReviews;
+    })
+  );
+
+  return {
+    ...bundle,
+    price: bundlePrice,
+    discounted_price: bundleDiscountedPrice,
+    products: populatedProducts.filter(Boolean),
+  };
 };
 
 const createBundle = async (data) => {

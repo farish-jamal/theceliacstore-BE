@@ -47,7 +47,10 @@ const createBundle = asyncHandler(async (req, res) => {
     bundleData.products = bundleData.products.map((p) =>
       typeof p === "string" ? JSON.parse(p) : p
     );
+
+    console.log("bundleData", bundleData)
     for (const entry of bundleData.products) {
+      console.log(">>>>>",entry.product)
       const productDoc = await Product.findById(entry.product).lean();
       if (!productDoc) {
         return res.json(new ApiResponse(400, null, `Product not found: ${entry.product}`, false));
