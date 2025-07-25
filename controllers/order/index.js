@@ -214,10 +214,107 @@ const getOrderById = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, order, "Order fetched successfully", true));
 });
 
+const editOrder = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid order ID", false));
+  }
+  const order = await Order.findOne({ _id: id, user: userId });
+  if (!order) {
+    return res.status(404).json(new ApiResponse(404, null, "Order not found", false));
+  }
+  if (order.status !== "pending") {
+    return res.status(400).json(new ApiResponse(400, null, "Only pending orders can be edited", false));
+  }
+
+  const { addressId, items } = req.body;
+  let addressSnapshot = order.address;
+  if (addressId) {
+    const address = await Address.findOne({ _id: addressId, user: userId });
+    if (!address) {
+      return res.status(400).json(new ApiResponse(400, null, "Address not found", false));
+    }
+    addressSnapshot = { ...address.toObject() };
+    delete addressSnapshot._id;
+    delete addressSnapshot.user;
+    delete addressSnapshot.createdAt;
+    delete addressSnapshot.updatedAt;
+    delete addressSnapshot.__v;
+  }
+
+  let totalAmount = 0;
+  let discountedTotalAmount = 0;
+  const orderItems = [];
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      if (item.type === "product") {
+        const product = await Product.findById(item.product);
+        if (!product) continue;
+        const price = parseFloat(product.price.toString());
+        const discountedPrice = product.discounted_price ? parseFloat(product.discounted_price.toString()) : price;
+        const itemTotal = price * item.quantity;
+        const discountedItemTotal = discountedPrice * item.quantity;
+        totalAmount += itemTotal;
+        discountedTotalAmount += discountedItemTotal;
+        orderItems.push({
+          type: "product",
+          product: {
+            _id: product._id,
+            name: product.name,
+            price: product.price,
+            discounted_price: product.discounted_price,
+            banner_image: product.banner_image,
+            sub_category: product.sub_category,
+          },
+          quantity: item.quantity,
+          total_amount: itemTotal,
+          discounted_total_amount: discountedItemTotal,
+        });
+      } else if (item.type === "bundle") {
+        const bundle = await Bundle.findById(item.bundle);
+        if (!bundle) continue;
+        const price = parseFloat(bundle.price.toString());
+        const discountedPrice = bundle.discounted_price ? parseFloat(bundle.discounted_price.toString()) : price;
+        const itemTotal = price * item.quantity;
+        const discountedItemTotal = discountedPrice * item.quantity;
+        totalAmount += itemTotal;
+        discountedTotalAmount += discountedItemTotal;
+        orderItems.push({
+          type: "bundle",
+          bundle: {
+            _id: bundle._id,
+            name: bundle.name,
+            price: bundle.price,
+            discounted_price: bundle.discounted_price,
+            images: bundle.images,
+            description: bundle.description,
+            products: bundle.products,
+          },
+          quantity: item.quantity,
+          total_amount: itemTotal,
+          discounted_total_amount: discountedItemTotal,
+        });
+      }
+    }
+  }
+
+  if (orderItems.length > 0) {
+    order.items = orderItems;
+    order.totalAmount = totalAmount;
+    order.discountedTotalAmount = discountedTotalAmount;
+  }
+  order.address = addressSnapshot;
+  await order.save();
+
+  return res.status(200).json(new ApiResponse(200, order, "Order updated successfully", true));
+});
+
 module.exports = {
   createOrder,
   getOrderHistory,
   getAllOrders,
   updateOrder,
   getOrderById,
+  editOrder,
 };

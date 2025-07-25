@@ -14,6 +14,7 @@ router.post("/", user, OrderController.createOrder);
 // router.post("/buy-now", user, OrderController.buyNowOrder);
 router.get("/history", user, OrderController.getOrderHistory);
 router.patch("/:id", adminOrSuperAdmin, OrderController.updateOrder);
+router.patch("/edit/:id", user, OrderController.editOrder);
 router.get("/:id", adminOrSuperAdmin, OrderController.getOrderById);
 // router.get("/generate-order-bill/:id", user, OrderController.generateOrderBill);
 

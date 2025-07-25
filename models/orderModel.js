@@ -94,9 +94,13 @@ const OrderSchema = new mongoose.Schema({
 
 OrderSchema.set("toJSON", {
   transform: (doc, ret) => {
-    // Convert totalAmount and discountedTotalAmount to number
-    ret.totalAmount = parseFloat(ret.totalAmount.toString());
-    ret.discountedTotalAmount = parseFloat(ret.discountedTotalAmount.toString());
+    // Convert totalAmount and discountedTotalAmount to number with null checks
+    if (ret.totalAmount) {
+      ret.totalAmount = parseFloat(ret.totalAmount.toString());
+    }
+    if (ret.discountedTotalAmount) {
+      ret.discountedTotalAmount = parseFloat(ret.discountedTotalAmount.toString());
+    }
 
     // Ensure ret.items is an array before mapping
     if (Array.isArray(ret.items)) {
@@ -106,26 +110,26 @@ OrderSchema.set("toJSON", {
             ...item,
             product: {
               ...item.product,
-              price: parseFloat(item.product.price.toString()),
+              price: item.product.price ? parseFloat(item.product.price.toString()) : null,
               discounted_price: item.product.discounted_price
                 ? parseFloat(item.product.discounted_price.toString())
                 : null
             },
-            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined,
-            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : undefined
+            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : null,
+            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : null
           };
         } else if (item.type === "bundle" && item.bundle) {
           return {
             ...item,
             bundle: {
               ...item.bundle,
-              price: parseFloat(item.bundle.price.toString()),
+              price: item.bundle.price ? parseFloat(item.bundle.price.toString()) : null,
               discounted_price: item.bundle.discounted_price
                 ? parseFloat(item.bundle.discounted_price.toString())
                 : null
             },
-            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : undefined,
-            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : undefined
+            total_amount: item.total_amount ? parseFloat(item.total_amount.toString()) : null,
+            discounted_total_amount: item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : null
           };
         }
         return item;
