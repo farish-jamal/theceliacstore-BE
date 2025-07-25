@@ -4,6 +4,7 @@ const ApiResponse = require("../../utils/ApiResponse.js");
 const BlogService = require("../../services/blogs/index.js");
 const BlogRepositories = require("../../repositories/blogs/index.js");
 const { uploadSingleFile } = require("../../utils/upload/index.js");
+const Blog = require("../../models/blogModel.js");
 
 const postBlogs = asyncHandler(async (req, res) => {
   const adminId = req.admin.id;
@@ -58,8 +59,6 @@ const getBlogs = asyncHandler(async (req, res) => {
     per_page: parseInt(per_page),
   });
 
-  console.log("Blogs fetched:", blogs);
-
   if (!blogs || blogs.length === 0) {
     return res.json(new ApiResponse(201, [], "No Blogs Found", false));
   }
@@ -95,16 +94,22 @@ const updateBlog = asyncHandler(async (req, res) => {
   }
 
   const bannerImageFile = req.file;
+  let bannerImageUrl = null;
 
-  const bannerImageUrl = await uploadSingleFile(
-    bannerImageFile.path,
-    "uploads/images"
-  );
+  if (bannerImageFile) {
+    bannerImageUrl = await uploadSingleFile(
+      bannerImageFile.path,
+      "uploads/images"
+    );
+  }
 
   const data = {
     ...req.body,
-    bannerImageUrl,
   };
+  
+  if (bannerImageUrl) {
+    data.banner_image_url = bannerImageUrl;
+  }
 
   const blog = await BlogService.updateBlog(id, data);
 
@@ -120,12 +125,12 @@ const deleteBlog = asyncHandler(async (req, res) => {
       new ApiResponse(400, null, "Invalid blog ID format", false)
     );
   }
-  const blog = await BlogRepositories.getSingleBlogById(id);
+  const blog = await Blog.findById(id);
 
   if (!blog) {
     return res.json(new ApiResponse(404, null, "No Blog Found", false));
   }
-  await BlogRepositories.deleteBlogById(id);
+  await Blog.findByIdAndDelete(id);
   return res.json(
     new ApiResponse(201, null, "Blog Deleted successfully", true)
   );
