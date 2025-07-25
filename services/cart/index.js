@@ -30,10 +30,26 @@ const updateCart = async ({
     if (!itemData) {
       throw new Error("Product not found");
     }
-    itemPrice =
-      itemData.discounted_price !== null
+    
+    let itemPrice;
+    
+    // If variant_sku is provided, use variant-specific pricing
+    if (variant_sku && Array.isArray(itemData.variants)) {
+      const variant = itemData.variants.find(v => v.sku === variant_sku);
+      if (!variant) {
+        throw new Error(`Variant with SKU '${variant_sku}' not found`);
+      }
+      // Use variant's discounted price if available, otherwise use variant's regular price
+      itemPrice = variant.discounted_price !== null && variant.discounted_price !== undefined
+        ? variant.discounted_price
+        : variant.price;
+    } else {
+      // Use product's main pricing
+      itemPrice = itemData.discounted_price !== null
         ? itemData.discounted_price
         : itemData.price;
+    }
+    
     item = {
       type: "product",
       product: product_id,
