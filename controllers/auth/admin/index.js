@@ -197,6 +197,18 @@ const registerSubAdmin = asyncHandler(async (req, res) => {
   );
 });
 
+const getSingleAdmin = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const admin = await Admin.findById(id);
+  if (!admin) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Admin not found", false));
+  }
+  res.json(new ApiResponse(200, admin, "Admin fetched successfully", true));
+});
+
 module.exports = {
   getAllAdmins,
   registerAdmin,
@@ -205,4 +217,5 @@ module.exports = {
   deleteAdmin,
   getAllSubAdmins,
   registerSubAdmin,
+  getSingleAdmin,
 };
