@@ -180,8 +180,11 @@ const createOrder = asyncHandler(async (req, res) => {
 
 const getOrderHistory = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const orders = await Order.find({ user: userId }).sort({ createdAt: -1 });
-  return res.status(200).json(new ApiResponse(200, orders, "Orders fetched successfully", true));
+  const [orders, total] = await Promise.all([
+    Order.find({ user: userId }).sort({ createdAt: -1 }),
+    Order.countDocuments({ user: userId })
+  ]);
+  return res.status(200).json(new ApiResponse(200, { data: orders, total }, "Orders fetched successfully", true));
 });
 
 const updateOrder = asyncHandler(async (req, res) => {
