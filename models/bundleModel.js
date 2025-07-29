@@ -35,6 +35,10 @@ const BundleSchema = new mongoose.Schema(
     },
     images: { type: [String], default: [] },
     is_active: { type: Boolean, default: true },
+    is_best_seller: {
+      type: Boolean,
+      default: false,
+    },
     meta_data: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
     created_by_admin: {
       type: mongoose.Schema.Types.ObjectId,

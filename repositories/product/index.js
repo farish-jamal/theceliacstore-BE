@@ -18,7 +18,8 @@ const getAllProducts = async ({
 
   let subCategoryIds = [];
   if (category) {
-    const subCats = await SubCategory.find({ category: category }, "_id");
+    const categoryArray = Array.isArray(category) ? category : [category];
+    const subCats = await SubCategory.find({ category: { $in: categoryArray } }, "_id");
     subCategoryIds = subCats.map((sc) => sc._id);
     if (sub_category) {
       const subCatArray = Array.isArray(sub_category)

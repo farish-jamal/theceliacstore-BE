@@ -17,13 +17,19 @@ const getAllBundles = async ({
   const skip = (page - 1) * per_page;
   const match = {};
 
+  // Handle search filter
   if (search) {
     match.name = { $regex: search, $options: "i" };
   }
 
-  if (is_best_seller !== undefined) {
-    match.is_best_seller = is_best_seller;
+  // Handle is_best_seller filter
+  if (is_best_seller !== undefined && is_best_seller !== null) {
+    const bestSellerValue = is_best_seller === 'true' || is_best_seller === true;
+    match.is_best_seller = bestSellerValue;
+    console.log("Bundle is_best_seller filter applied:", bestSellerValue);
   }
+
+  // Handle price range filter
   if (price_range) {
     const priceRanges = Array.isArray(price_range) ? price_range : [price_range];
     let minPrice = Infinity;
@@ -46,27 +52,7 @@ const getAllBundles = async ({
     }
   }
 
-  let productMatch = {};
-  if (brands) {
-    productMatch.brand = { $in: Array.isArray(brands) ? brands : [brands] };
-  }
-
-  if (is_best_seller !== undefined) {
-    productMatch.is_best_seller = is_best_seller;
-  }
-  
-  if (category) {
-    const subCats = await SubCategory.find({ category: category }, '_id');
-    const subCategoryIds = subCats.map(sc => sc._id);
-    if (subCategoryIds.length > 0) {
-      productMatch.sub_category = { $in: subCategoryIds };
-    } else {
-      return { data: [], total: 0 };
-    }
-  } else if (sub_category) {
-    productMatch.sub_category = Array.isArray(sub_category) ? { $in: sub_category } : sub_category;
-  }
-
+  // Handle sort options
   let sortOptions = {};
   switch (sort_by) {
     case "latest":
@@ -83,16 +69,134 @@ const getAllBundles = async ({
       sortOptions = { createdAt: -1 };
   }
 
-  // Fetch bundles (no aggregation pipeline, use lean for performance)
-  const bundles = await Bundle.find(match)
-    .sort(sortOptions)
-    .skip(skip)
-    .limit(per_page)
-    .lean();
+  // Build aggregation pipeline
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: "products",
+        localField: "products.product",
+        foreignField: "_id",
+        as: "populatedProducts"
+      }
+    },
+    {
+      $addFields: {
+        populatedProducts: {
+          $map: {
+            input: "$products",
+            as: "bundleProduct",
+            in: {
+              $let: {
+                vars: {
+                  productDoc: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$populatedProducts",
+                          cond: { $eq: ["$$this._id", "$$bundleProduct.product"] }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                },
+                in: {
+                  product: "$$productDoc",
+                  variant_sku: "$$bundleProduct.variant_sku"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      $unset: "products"
+    }
+  ];
 
-  // Populate products and handle variants
-  const populatedBundles = await Promise.all(
+  // Add category and sub_category filtering through products
+  if (category || sub_category) {
+    let subCategoryIds = [];
+    
+    if (category) {
+      const categoryArray = Array.isArray(category) ? category : [category];
+      const subCats = await SubCategory.find({ category: { $in: categoryArray } }, "_id");
+      subCategoryIds = subCats.map((sc) => sc._id);
+      if (sub_category) {
+        const subCatArray = Array.isArray(sub_category) ? sub_category : [sub_category];
+        subCategoryIds = subCategoryIds.filter((id) =>
+          subCatArray.includes(id.toString())
+        );
+      }
+    } else if (sub_category) {
+      subCategoryIds = Array.isArray(sub_category) ? sub_category : [sub_category];
+    }
+
+    if (subCategoryIds.length > 0) {
+      pipeline.push({
+        $match: {
+          "populatedProducts.product.sub_category": { $in: subCategoryIds }
+        }
+      });
+    } else {
+      return { data: [], total: 0 };
+    }
+  }
+
+  // Add brands filtering through products
+  if (brands) {
+    pipeline.push({
+      $match: {
+        "populatedProducts.product.brand": { $in: Array.isArray(brands) ? brands : [brands] }
+      }
+    });
+  }
+
+  // Add rating filtering through products
+  if (rating) {
+    pipeline.push({
+      $lookup: {
+        from: "reviews",
+        localField: "populatedProducts.product._id",
+        foreignField: "productId",
+        as: "productReviews"
+      }
+    });
+    pipeline.push({
+      $addFields: {
+        avgRating: { $avg: "$productReviews.rating" }
+      }
+    });
+    pipeline.push({
+      $match: { avgRating: { $gte: Number(rating) } }
+    });
+  }
+
+  // Add sorting, skip, and limit
+  pipeline.push({ $sort: sortOptions });
+  pipeline.push({ $skip: skip });
+  pipeline.push({ $limit: per_page });
+
+  console.log("Bundle match filter:", match);
+  console.log("Bundle pipeline stages:", pipeline.length);
+
+  // Execute the pipeline
+  const bundles = await Bundle.aggregate(pipeline);
+
+  // Get total count
+  const countPipeline = pipeline.filter(
+    (stage) => !("$skip" in stage) && !("$limit" in stage) && !("$sort" in stage)
+  );
+  countPipeline.push({ $count: "total" });
+  const totalResult = await Bundle.aggregate(countPipeline);
+  const total = totalResult[0]?.total || 0;
+
+  // Process and populate products with reviews
+  const processedBundles = await Promise.all(
     bundles.map(async (bundle) => {
+      // Convert bundle prices
       let bundlePrice = bundle.price;
       let bundleDiscountedPrice = bundle.discounted_price;
       if (bundlePrice && bundlePrice.$numberDecimal) {
@@ -105,13 +209,14 @@ const getAllBundles = async ({
       } else if (bundleDiscountedPrice && bundleDiscountedPrice.toString) {
         bundleDiscountedPrice = parseFloat(bundleDiscountedPrice.toString());
       }
-      const populatedProducts = await Promise.all(
-        (bundle.products || []).map(async (entry) => {
-          const productDoc = await Product.findById(entry.product).lean();
-          if (!productDoc) return null;
 
-          let productPrice = productDoc.price;
-          let productDiscountedPrice = productDoc.discounted_price;
+      // Process products and add reviews
+      const processedProducts = await Promise.all(
+        (bundle.populatedProducts || []).map(async (entry) => {
+          if (!entry.product) return null;
+
+          let productPrice = entry.product.price;
+          let productDiscountedPrice = entry.product.discounted_price;
           if (productPrice && productPrice.$numberDecimal) {
             productPrice = parseFloat(productPrice.$numberDecimal);
           } else if (productPrice && productPrice.toString) {
@@ -122,9 +227,10 @@ const getAllBundles = async ({
           } else if (productDiscountedPrice && productDiscountedPrice.toString) {
             productDiscountedPrice = parseFloat(productDiscountedPrice.toString());
           }
-          // Attach reviews
+
+          // Get reviews for the product
           const reviews = await Product.aggregate([
-            { $match: { _id: productDoc._id } },
+            { $match: { _id: entry.product._id } },
             {
               $lookup: {
                 from: "reviews",
@@ -140,19 +246,22 @@ const getAllBundles = async ({
               },
             },
           ]);
-          const productWithReviews = reviews[0] || productDoc;
+
+          const productWithReviews = reviews[0] || entry.product;
           productWithReviews.reviews = productWithReviews.reviews || [];
           productWithReviews.price = productPrice;
           productWithReviews.discounted_price = productDiscountedPrice;
-          // If variant_sku is present, attach only that variant
-          if (entry.variant_sku && Array.isArray(productDoc.variants)) {
-            const variant = productDoc.variants.find(v => v.sku === entry.variant_sku);
+
+          // Handle variants
+          if (entry.variant_sku && Array.isArray(entry.product.variants)) {
+            const variant = entry.product.variants.find(v => v.sku === entry.variant_sku);
             if (variant) {
               variant.price = variant.price && variant.price.$numberDecimal ? parseFloat(variant.price.$numberDecimal) : (variant.price && variant.price.toString ? parseFloat(variant.price.toString()) : variant.price);
               variant.discounted_price = variant.discounted_price && variant.discounted_price.$numberDecimal ? parseFloat(variant.discounted_price.$numberDecimal) : (variant.discounted_price && variant.discounted_price.toString ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price);
               productWithReviews.selected_variant = variant;
             }
           }
+
           if (Array.isArray(productWithReviews.variants)) {
             productWithReviews.variants = productWithReviews.variants.map(variant => ({
               ...variant,
@@ -160,22 +269,22 @@ const getAllBundles = async ({
               discounted_price: variant.discounted_price && variant.discounted_price.$numberDecimal ? parseFloat(variant.discounted_price.$numberDecimal) : (variant.discounted_price && variant.discounted_price.toString ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price),
             }));
           }
+
           return productWithReviews;
         })
       );
+
       return {
         ...bundle,
         price: bundlePrice,
         discounted_price: bundleDiscountedPrice,
-        products: populatedProducts.filter(Boolean),
+        products: processedProducts.filter(Boolean),
       };
     })
   );
 
-  const total = await Bundle.countDocuments(match);
-
   return {
-    data: populatedBundles,
+    data: processedBundles,
     total,
   };
 };

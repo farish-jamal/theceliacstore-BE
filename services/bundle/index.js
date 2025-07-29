@@ -1,7 +1,29 @@
 const BundleRepository = require("../../repositories/bundle/index.js");
 
-const getAllBundles = async (params) => {
-  return await BundleRepository.getAllBundles(params);
+const getAllBundles = async ({
+  page,
+  per_page,
+  category,
+  sub_category,
+  is_best_seller,
+  search,
+  price_range,
+  sort_by,
+  rating,
+  brands
+}) => {
+  return await BundleRepository.getAllBundles({
+    page,
+    per_page,
+    category,
+    sub_category,
+    is_best_seller,
+    search,
+    price_range,
+    sort_by,
+    rating,
+    brands
+  });
 };
 
 const getBundleById = async (id) => {
