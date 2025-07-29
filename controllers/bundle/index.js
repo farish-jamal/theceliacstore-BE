@@ -4,6 +4,12 @@ const BundleService = require("../../services/bundle/index.js");
 const mongoose = require("mongoose");
 const { uploadMultipleFiles } = require("../../utils/upload/index.js");
 const Product = require("../../models/productsModel.js");
+const Bundle = require("../../models/bundleModel.js");
+const XLSX = require("xlsx");
+const os = require("os");
+const path = require("path");
+const fs = require("fs/promises");
+const { uploadPDF } = require("../../utils/upload/index.js");
 
 const getAllBundles = asyncHandler(async (req, res) => {
   const {
@@ -186,10 +192,241 @@ const deleteBundle = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, null, "Bundle deleted successfully", true));
 });
 
+// Helper: Convert array of objects to CSV
+function convertToCSV(arr) {
+  if (!arr.length) return "";
+  const header = Object.keys(arr[0]).join(",");
+  const rows = arr.map((obj) =>
+    Object.values(obj)
+      .map((v) => (typeof v === "string" ? `"${v.replace(/"/g, '""')}"` : v))
+      .join(",")
+  );
+  return [header, ...rows].join("\n");
+}
+
+// Helper: Convert array of objects to XLSX using xlsx library
+function convertToXLSX(arr) {
+  const ws = XLSX.utils.json_to_sheet(arr);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Bundles");
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+const exportBundles = asyncHandler(async (req, res) => {
+  try {
+    const fileType = req.query.fileType?.toLowerCase() || "xlsx";
+    const startDate = req.query.start_date
+      ? new Date(req.query.start_date)
+      : null;
+    const endDate = req.query.end_date ? new Date(req.query.end_date) : null;
+
+    const filter = {};
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    } else if (startDate) {
+      filter.createdAt = { $gte: startDate };
+    } else if (endDate) {
+      filter.createdAt = { $lte: endDate };
+    }
+
+    console.log("Export filter:", filter);
+
+    // Use aggregation to populate product details and category/sub-category names
+    const bundles = await Bundle.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: "products",
+          localField: "products.product",
+          foreignField: "_id",
+          as: "productDetails"
+        }
+      },
+      {
+        $addFields: {
+          products: {
+            $map: {
+              input: "$products",
+              as: "bundleProduct",
+              in: {
+                $let: {
+                  vars: {
+                    productDoc: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: "$productDetails",
+                            cond: { $eq: ["$$this._id", "$$bundleProduct.product"] }
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  },
+                  in: {
+                    product: "$$productDoc",
+                    variant_sku: "$$bundleProduct.variant_sku",
+                    quantity: "$$bundleProduct.quantity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          description: 1,
+          price: 1,
+          discounted_price: 1,
+          images: 1,
+          is_active: 1,
+          is_best_seller: 1,
+          meta_data: 1,
+          created_by_admin: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          products: 1
+        }
+      }
+    ]);
+
+    console.log("Bundles found:", bundles.length);
+
+    // Flatten bundles for export - each bundle becomes multiple rows (one per product)
+    const serializedBundles = bundles.flatMap((bundle) => {
+      const { __v, _id, createdAt, updatedAt, products, ...rest } = bundle;
+      
+      // Convert bundle prices
+      let bundlePrice = bundle.price;
+      let bundleDiscountedPrice = bundle.discounted_price;
+      if (bundlePrice && bundlePrice.$numberDecimal) {
+        bundlePrice = parseFloat(bundlePrice.$numberDecimal);
+      } else if (bundlePrice && bundlePrice.toString) {
+        bundlePrice = parseFloat(bundlePrice.toString());
+      }
+      if (bundleDiscountedPrice && bundleDiscountedPrice.$numberDecimal) {
+        bundleDiscountedPrice = parseFloat(bundleDiscountedPrice.$numberDecimal);
+      } else if (bundleDiscountedPrice && bundleDiscountedPrice.toString) {
+        bundleDiscountedPrice = parseFloat(bundleDiscountedPrice.toString());
+      }
+
+      if (Array.isArray(bundle.products) && bundle.products.length > 0) {
+        return bundle.products.map((entry) => {
+          if (!entry.product) return null;
+
+          // Convert product prices
+          let productPrice = entry.product.price;
+          let productDiscountedPrice = entry.product.discounted_price;
+          if (productPrice && productPrice.$numberDecimal) {
+            productPrice = parseFloat(productPrice.$numberDecimal);
+          } else if (productPrice && productPrice.toString) {
+            productPrice = parseFloat(productPrice.toString());
+          }
+          if (productDiscountedPrice && productDiscountedPrice.$numberDecimal) {
+            productDiscountedPrice = parseFloat(productDiscountedPrice.$numberDecimal);
+          } else if (productDiscountedPrice && productDiscountedPrice.toString) {
+            productDiscountedPrice = parseFloat(productDiscountedPrice.toString());
+          }
+
+          return {
+            bundle_id: bundle._id.toString(),
+            bundle_name: bundle.name,
+            bundle_description: bundle.description,
+            bundle_price: bundlePrice,
+            bundle_discounted_price: bundleDiscountedPrice,
+            bundle_is_best_seller: bundle.is_best_seller || false,
+            bundle_is_active: bundle.is_active,
+            bundle_created_at: createdAt?.toISOString(),
+            bundle_updated_at: updatedAt?.toISOString(),
+            product_id: entry.product._id.toString(),
+            product_name: entry.product.name,
+            product_small_description: entry.product.small_description,
+            product_price: productPrice,
+            product_discounted_price: productDiscountedPrice,
+            product_inventory: entry.product.inventory,
+            product_is_best_seller: entry.product.is_best_seller || false,
+            variant_sku: entry.variant_sku || "",
+            quantity: entry.quantity || 1,
+            product_images: Array.isArray(entry.product.images) ? entry.product.images.join("|") : "",
+            bundle_images: Array.isArray(bundle.images) ? bundle.images.join("|") : "",
+            ...rest
+          };
+        }).filter(Boolean);
+      } else {
+        return [{
+          bundle_id: bundle._id.toString(),
+          bundle_name: bundle.name,
+          bundle_description: bundle.description,
+          bundle_price: bundlePrice,
+          bundle_discounted_price: bundleDiscountedPrice,
+          bundle_is_best_seller: bundle.is_best_seller || false,
+          bundle_is_active: bundle.is_active,
+          bundle_created_at: createdAt?.toISOString(),
+          bundle_updated_at: updatedAt?.toISOString(),
+          product_id: "",
+          product_name: "",
+          product_small_description: "",
+          product_price: "",
+          product_discounted_price: "",
+          product_inventory: "",
+          product_is_best_seller: "",
+          variant_sku: "",
+          quantity: "",
+          product_images: "",
+          bundle_images: Array.isArray(bundle.images) ? bundle.images.join("|") : "",
+          ...rest
+        }];
+      }
+    });
+
+    console.log("Serialized bundles:", serializedBundles.length);
+
+    let buffer;
+    let mimeType = "";
+    let filename = `bundles_${Date.now()}.${fileType}`;
+
+    if (fileType === "csv") {
+      const content = convertToCSV(serializedBundles);
+      buffer = Buffer.from(content, "utf-8");
+      mimeType = "text/csv";
+    } else if (fileType === "xlsx") {
+      buffer = convertToXLSX(serializedBundles);
+      mimeType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    } else {
+      return res.json(new ApiResponse(400, null, "Unsupported file type", false));
+    }
+
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, filename);
+    await fs.writeFile(tempFilePath, buffer);
+
+    const url = await uploadPDF(tempFilePath, "exports");
+
+    console.log("Export completed successfully");
+
+    return res.json(
+      new ApiResponse(
+        200,
+        { url, mimeType, filename },
+        "Bundles exported and uploaded successfully",
+        true
+      )
+    );
+  } catch (error) {
+    console.error("Export error:", error);
+    return res.json(new ApiResponse(500, null, `Export failed: ${error.message}`, false));
+  }
+});
+
 module.exports = {
   getAllBundles,
   getBundleById,
   createBundle,
   updateBundle,
   deleteBundle,
+  exportBundles,
 };

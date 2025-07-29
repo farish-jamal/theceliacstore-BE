@@ -9,6 +9,7 @@ const upload = multer({ storage: storage });
 
 router.post("/", adminOrSuperAdmin, upload.array("images"), BundleController.createBundle);
 router.get("/", BundleController.getAllBundles);
+router.get("/export", adminOrSuperAdmin, BundleController.exportBundles);
 router.get("/:id", BundleController.getBundleById);
 router.put("/:id", adminOrSuperAdmin, upload.array("images"), BundleController.updateBundle);
 router.delete("/:id", adminOrSuperAdmin, BundleController.deleteBundle);

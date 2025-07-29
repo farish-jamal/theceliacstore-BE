@@ -406,16 +406,66 @@ const exportProducts = asyncHandler(async (req, res) => {
     filter.createdAt = { $lte: endDate };
   }
 
-  const products = await Product.find(filter).lean();
+  const products = await Product.aggregate([
+    { $match: filter },
+    {
+      $lookup: {
+        from: "subcategories",
+        localField: "sub_category",
+        foreignField: "_id",
+        as: "subCategoryData"
+      }
+    },
+    {
+      $unwind: {
+        path: "$subCategoryData",
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $lookup: {
+        from: "categories",
+        localField: "subCategoryData.category",
+        foreignField: "_id",
+        as: "categoryData"
+      }
+    },
+    {
+      $unwind: {
+        path: "$categoryData",
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $addFields: {
+        sub_category_name: "$subCategoryData.name",
+        category_name: "$categoryData.name"
+      }
+    },
+    {
+      $project: {
+        subCategoryData: 0,
+        categoryData: 0
+      }
+    }
+  ]);
+
+  // Debug: Log first product to see the structure
+  if (products.length > 0) {
+    console.log("First product structure:", JSON.stringify(products[0], null, 2));
+  }
+
   // Flatten variants for export
   const serializedProducts = products.flatMap((p) => {
-    const { __v, _id, createdAt, updatedAt, variants, ...rest } = p;
+    const { __v, _id, createdAt, updatedAt, variants, sub_category, ...rest } = p;
     if (Array.isArray(variants) && variants.length > 0) {
       return variants.map((variant) => ({
         id: p._id.toString(),
         createdAt: createdAt?.toISOString(),
         updatedAt: updatedAt?.toISOString(),
         ...rest,
+        category_name: p.category_name || "",
+        sub_category_name: p.sub_category_name || "",
         variant_sku: variant.sku,
         variant_name: variant.name,
         variant_attributes: JSON.stringify(variant.attributes || {}),
@@ -439,6 +489,8 @@ const exportProducts = asyncHandler(async (req, res) => {
           createdAt: createdAt?.toISOString(),
           updatedAt: updatedAt?.toISOString(),
           ...rest,
+          category_name: p.category_name || "",
+          sub_category_name: p.sub_category_name || "",
           variant_sku: "",
           variant_name: "",
           variant_attributes: "",
