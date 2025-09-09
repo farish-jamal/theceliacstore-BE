@@ -72,9 +72,10 @@ const ProductSchema = new mongoose.Schema(
       of: mongoose.Schema.Types.Mixed,
       default: {},
     },
-    uploaded_by_brand: {
-      type: String,
-      maxlength: 255,
+    brand: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Brand",
+      required: true,
     },
     is_best_seller: {
       type: Boolean,

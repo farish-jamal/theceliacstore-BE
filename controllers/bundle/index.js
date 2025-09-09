@@ -386,7 +386,9 @@ const exportBundles = asyncHandler(async (req, res) => {
 
     let buffer;
     let mimeType = "";
-    let filename = `bundles_${Date.now()}.${fileType}`;
+    const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentTime = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS format
+    let filename = `bundles_export_${currentDate}_${currentTime}.${fileType}`;
 
     if (fileType === "csv") {
       const content = convertToCSV(serializedBundles);
@@ -422,6 +424,233 @@ const exportBundles = asyncHandler(async (req, res) => {
   }
 });
 
+const generateSampleFile = asyncHandler(async (req, res) => {
+  const fileType = req.query.fileType?.toLowerCase() || "xlsx";
+  
+  try {
+    // Fetch all categories, sub-categories, and products for dropdown options
+    const Category = require("../../models/categoryModel.js");
+    const SubCategory = require("../../models/subCategoryModel.js");
+    const Product = require("../../models/productsModel.js");
+    
+    const categories = await Category.find({ is_active: true }).lean();
+    const subCategories = await SubCategory.find({ is_active: true }).populate('category').lean();
+    const products = await Product.find({ is_active: true }).lean();
+    
+    // Create category and sub-category mappings
+    const categoryOptions = categories.map(cat => `${cat.name} (${cat._id})`).join(' | ');
+    const subCategoryOptions = subCategories.map(subCat => `${subCat.name} (${subCat._id})`).join(' | ');
+    const productOptions = products.map(prod => `${prod.name} (${prod._id})`).join(' | ');
+    
+    // Create column headers with dropdown options
+    const columnHeaders = {
+      bundle_name: "Bundle Name (Required)",
+      bundle_description: "Bundle Description (Optional)",
+      bundle_price: "Bundle Price (Required) - Number only, no currency symbols",
+      bundle_discounted_price: "Bundle Discounted Price (Optional) - Number only",
+      bundle_is_best_seller: "Bundle Is Best Seller (Optional) - 'true' or 'false'",
+      bundle_is_active: "Bundle Is Active (Optional) - 'true' or 'false'",
+      bundle_meta_data: "Bundle Meta Data (Optional) - JSON format: {\"key\": \"value\"}",
+      // Product entries (JSON array format)
+      products: "Products (Required) - JSON array: [{\"product\": \"PRODUCT_ID\", \"variant_sku\": \"SKU\", \"quantity\": 1}]",
+      // Individual product fields for reference
+      product_1_id: `Product 1 ID (Required) - Select from: ${productOptions}`,
+      product_1_variant_sku: "Product 1 Variant SKU (Required if product has variants)",
+      product_1_quantity: "Product 1 Quantity (Required) - Number",
+      product_2_id: `Product 2 ID (Optional) - Select from: ${productOptions}`,
+      product_2_variant_sku: "Product 2 Variant SKU (Required if product has variants)",
+      product_2_quantity: "Product 2 Quantity (Optional) - Number",
+      product_3_id: `Product 3 ID (Optional) - Select from: ${productOptions}`,
+      product_3_variant_sku: "Product 3 Variant SKU (Required if product has variants)",
+      product_3_quantity: "Product 3 Quantity (Optional) - Number"
+    };
+
+    // Create instructions sheet
+    const instructions = [
+      {
+        field: "Required Fields",
+        description: "These fields must be filled",
+        example: "bundle_name, bundle_price, products"
+      },
+      {
+        field: "Optional Fields",
+        description: "These fields can be left empty",
+        example: "bundle_discounted_price, bundle_meta_data"
+      },
+      {
+        field: "bundle_price",
+        description: "Must be a number (no currency symbols)",
+        example: "5000 (not $5000)"
+      },
+      {
+        field: "bundle_is_best_seller",
+        description: "Must be 'true' or 'false' (string)",
+        example: "true or false"
+      },
+      {
+        field: "bundle_is_active",
+        description: "Must be 'true' or 'false' (string)",
+        example: "true or false"
+      },
+      {
+        field: "bundle_meta_data",
+        description: "Valid JSON format",
+        example: '{"key": "value"}'
+      },
+      {
+        field: "products",
+        description: "JSON array of product objects",
+        example: '[{"product": "PRODUCT_ID", "variant_sku": "SKU", "quantity": 1}]'
+      },
+      {
+        field: "product_*_id",
+        description: "Select from the product dropdown options",
+        example: "Use the exact format: Product Name (ID)"
+      },
+      {
+        field: "variant_sku",
+        description: "Required only if product has variants",
+        example: "Leave empty for products without variants"
+      },
+      {
+        field: "quantity",
+        description: "Number of items in bundle",
+        example: "1, 2, 3, etc."
+      }
+    ];
+
+    let buffer;
+    let mimeType = "";
+    const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentTime = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS format
+    let filename = `bundle_template_${currentDate}_${currentTime}.${fileType}`;
+
+    if (fileType === "csv") {
+      const headers = Object.keys(columnHeaders);
+      const content = headers.join(",") + "\n";
+      buffer = Buffer.from(content, "utf-8");
+      mimeType = "text/csv";
+    } else if (fileType === "xlsx") {
+      // Create workbook with just one sheet
+      const wb = XLSX.utils.book_new();
+      
+      // Create the main data with sample rows for dropdown validation
+      const categoryIds = categories.map(cat => `${cat.name} (${cat._id})`);
+      const subCategoryIds = subCategories
+        .filter(subCat => subCat.category && subCat.category._id)
+        .map(subCat => `${subCat.name} (${subCat._id})`);
+      const productIds = products.map(prod => `${prod.name} (${prod._id})`);
+      
+      // Create sample data with dropdown options in the cells
+      const sampleData = [
+        {
+          bundle_name: "Bundle Name (Required)",
+          bundle_description: "Bundle Description (Optional)",
+          bundle_price: "Bundle Price (Required) - Number only",
+          bundle_discounted_price: "Bundle Discounted Price (Optional)",
+          bundle_is_best_seller: "Bundle Is Best Seller (Optional) - 'true' or 'false'",
+          bundle_is_active: "Bundle Is Active (Optional) - 'true' or 'false'",
+          bundle_meta_data: "Bundle Meta Data (Optional) - JSON format",
+          products: "Products (Required) - JSON array: [{\"product\": \"PRODUCT_ID\", \"variant_sku\": \"SKU\", \"quantity\": 1}]",
+          product_1_id: `Product 1 ID (Required) - Select from: ${productIds.join(' | ')}`,
+          product_1_variant_sku: "Product 1 Variant SKU (Required if product has variants)",
+          product_1_quantity: "Product 1 Quantity (Required) - Number",
+          product_2_id: `Product 2 ID (Optional) - Select from: ${productIds.join(' | ')}`,
+          product_2_variant_sku: "Product 2 Variant SKU (Required if product has variants)",
+          product_2_quantity: "Product 2 Quantity (Optional) - Number",
+          product_3_id: `Product 3 ID (Optional) - Select from: ${productIds.join(' | ')}`,
+          product_3_variant_sku: "Product 3 Variant SKU (Required if product has variants)",
+          product_3_quantity: "Product 3 Quantity (Optional) - Number"
+        },
+        {
+          bundle_name: "",
+          bundle_description: "",
+          bundle_price: "",
+          bundle_discounted_price: "",
+          bundle_is_best_seller: "",
+          bundle_is_active: "",
+          bundle_meta_data: "",
+          products: "",
+          product_1_id: "",
+          product_1_variant_sku: "",
+          product_1_quantity: "",
+          product_2_id: "",
+          product_2_variant_sku: "",
+          product_2_quantity: "",
+          product_3_id: "",
+          product_3_variant_sku: "",
+          product_3_quantity: ""
+        }
+      ];
+      
+      // Create the worksheet
+      const ws = XLSX.utils.json_to_sheet(sampleData);
+      
+      // Add data validation for dropdowns
+      ws['!dataValidation'] = {
+        'I2:I1000': { // product_1_id column
+          type: 'list',
+          formula1: `"${productIds.join(',')}"`,
+          allowBlank: false,
+          showErrorMessage: true,
+          errorTitle: 'Invalid Product 1',
+          error: 'Please select a valid product from the dropdown list.'
+        },
+        'L2:L1000': { // product_2_id column
+          type: 'list',
+          formula1: `"${productIds.join(',')}"`,
+          allowBlank: true,
+          showErrorMessage: true,
+          errorTitle: 'Invalid Product 2',
+          error: 'Please select a valid product from the dropdown list.'
+        },
+        'O2:O1000': { // product_3_id column
+          type: 'list',
+          formula1: `"${productIds.join(',')}"`,
+          allowBlank: true,
+          showErrorMessage: true,
+          errorTitle: 'Invalid Product 3',
+          error: 'Please select a valid product from the dropdown list.'
+        }
+      };
+      
+      XLSX.utils.book_append_sheet(wb, ws, "Bundle Template");
+      
+      buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    } else {
+      return res.json(new ApiResponse(400, null, "Unsupported file type", false));
+    }
+
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, filename);
+    await fs.writeFile(tempFilePath, buffer);
+
+    const url = await uploadPDF(tempFilePath, "exports");
+
+    return res.json(
+      new ApiResponse(
+        200,
+        { 
+          url, 
+          mimeType, 
+          filename,
+          categories: categories.length,
+          subCategories: subCategories.length,
+          products: products.length,
+          instructions: "Check the Instructions sheet for detailed guidance",
+          columns: Object.keys(columnHeaders).length
+        },
+        "Bundle template file generated successfully",
+        true
+      )
+    );
+  } catch (error) {
+    console.error("Template file generation error:", error);
+    return res.json(new ApiResponse(500, null, `Template file generation failed: ${error.message}`, false));
+  }
+});
+
 module.exports = {
   getAllBundles,
   getBundleById,
@@ -429,4 +658,5 @@ module.exports = {
   updateBundle,
   deleteBundle,
   exportBundles,
+  generateSampleFile,
 };

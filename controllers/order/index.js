@@ -313,6 +313,250 @@ const editOrder = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, order, "Order updated successfully", true));
 });
 
+const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
+  try {
+    const orders = await Order.find({});
+    const productOrderMap = {};
+
+    // Iterate through all orders and count by product
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        if (item.type === "product" && item.product && item.product._id) {
+          // Handle individual products
+          const productId = item.product._id.toString();
+          
+          if (!productOrderMap[productId]) {
+            // Convert Decimal128 fields to numbers for direct products
+            productOrderMap[productId] = {
+              product: {
+                _id: item.product._id,
+                name: item.product.name,
+                price: item.product.price ? parseFloat(item.product.price.toString()) : null,
+                discounted_price: item.product.discounted_price ? parseFloat(item.product.discounted_price.toString()) : null,
+                banner_image: item.product.banner_image
+              },
+              totalOrders: 0,
+              totalQuantity: 0,
+              totalRevenue: 0,
+              totalDiscountedRevenue: 0
+            };
+          }
+          
+          productOrderMap[productId].totalOrders += 1;
+          productOrderMap[productId].totalQuantity += item.quantity || 0;
+          
+          // Safe parsing with null checks
+          const totalAmount = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
+          const discountedTotalAmount = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
+          
+          // If discounted_total_amount is 0 or null, calculate it from the product's discounted price
+          let finalDiscountedAmount = discountedTotalAmount;
+          if (discountedTotalAmount === 0 && item.product.discounted_price) {
+            const productDiscountedPrice = parseFloat(item.product.discounted_price.toString());
+            const productQuantity = item.quantity || 0;
+            finalDiscountedAmount = productDiscountedPrice * productQuantity;
+          }
+          
+          productOrderMap[productId].totalRevenue += totalAmount;
+          productOrderMap[productId].totalDiscountedRevenue += finalDiscountedAmount;
+        } else if (item.type === "bundle" && item.bundle && item.bundle.products) {
+          // Handle bundles - extract individual products from bundles
+          item.bundle.products.forEach(bundleProduct => {
+            const productId = bundleProduct.product.toString();
+            
+            if (!productOrderMap[productId]) {
+              productOrderMap[productId] = {
+                product: {
+                  _id: bundleProduct.product,
+                  name: `Product from Bundle: ${item.bundle.name}`,
+                  // We'll need to fetch actual product details
+                },
+                totalOrders: 0,
+                totalQuantity: 0,
+                totalRevenue: 0,
+                totalDiscountedRevenue: 0
+              };
+            }
+            
+            // Calculate quantity: bundle quantity * product quantity in bundle
+            const totalProductQuantity = (item.quantity || 0) * (bundleProduct.quantity || 0);
+            
+            productOrderMap[productId].totalOrders += 1;
+            productOrderMap[productId].totalQuantity += totalProductQuantity;
+            
+            // For bundles, we can't directly calculate individual product revenue
+            // So we'll distribute bundle revenue proportionally
+            const bundleRevenue = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
+            const bundleDiscountedRevenue = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
+            
+            // Simple proportional distribution (you might want to improve this logic)
+            const productCount = item.bundle.products.length;
+            productOrderMap[productId].totalRevenue += bundleRevenue / productCount;
+            productOrderMap[productId].totalDiscountedRevenue += bundleDiscountedRevenue / productCount;
+          });
+        }
+      });
+    });
+
+    // Fetch actual product details for products that came from bundles
+    for (const productId in productOrderMap) {
+      if (productOrderMap[productId].product.name && productOrderMap[productId].product.name.startsWith('Product from Bundle:')) {
+        const product = await Product.findById(productId);
+        if (product) {
+          productOrderMap[productId].product = {
+            _id: product._id,
+            name: product.name,
+            price: product.price ? parseFloat(product.price.toString()) : null,
+            discounted_price: product.discounted_price ? parseFloat(product.discounted_price.toString()) : null,
+            banner_image: product.banner_image
+          };
+        }
+      }
+    }
+
+    const result = Object.values(productOrderMap);
+    
+    return res.status(200).json(
+      new ApiResponse(200, result, "Products with order counts fetched successfully", true)
+    );
+  } catch (error) {
+    console.error("Error fetching products with order counts:", error);
+    return res.status(500).json(new ApiResponse(500, null, "Server error", false));
+  }
+});
+
+const getOrdersByProductId = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    return res.status(400).json(new ApiResponse(400, null, "Invalid product ID", false));
+  }
+
+  try {
+    // Find orders that contain this product either directly or in bundles
+    const orders = await Order.find({
+      $or: [
+        {
+          "items.type": "product",
+          "items.product._id": new mongoose.Types.ObjectId(productId)
+        },
+        {
+          "items.type": "bundle",
+          "items.bundle.products.product": new mongoose.Types.ObjectId(productId)
+        }
+      ]
+    });
+
+    let totalOrders = 0;
+    let totalQuantity = 0;
+    let totalRevenue = 0;
+    let totalDiscountedRevenue = 0;
+    let product = null;
+    const relevantOrders = [];
+
+    // Calculate stats and get product info
+    orders.forEach(order => {
+      let orderContainsProduct = false;
+      let orderQuantity = 0;
+      let orderRevenue = 0;
+      let orderDiscountedRevenue = 0;
+
+      order.items.forEach(item => {
+        if (item.type === "product" && item.product && item.product._id && item.product._id.toString() === productId) {
+          // Direct product order
+          orderContainsProduct = true;
+          orderQuantity += item.quantity || 0;
+          
+          // Safe parsing with null checks
+          const totalAmount = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
+          const discountedTotalAmount = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
+          
+          // If discounted_total_amount is 0 or null, calculate it from the product's discounted price
+          let finalDiscountedAmount = discountedTotalAmount;
+          if (discountedTotalAmount === 0 && item.product.discounted_price) {
+            const productDiscountedPrice = parseFloat(item.product.discounted_price.toString());
+            const productQuantity = item.quantity || 0;
+            finalDiscountedAmount = productDiscountedPrice * productQuantity;
+          }
+          
+          orderRevenue += totalAmount;
+          orderDiscountedRevenue += finalDiscountedAmount;
+          
+          if (!product) {
+            // Convert Decimal128 fields to numbers for product details
+            product = {
+              _id: item.product._id,
+              name: item.product.name,
+              price: item.product.price ? parseFloat(item.product.price.toString()) : null,
+              discounted_price: item.product.discounted_price ? parseFloat(item.product.discounted_price.toString()) : null,
+              banner_image: item.product.banner_image
+            };
+          }
+        } else if (item.type === "bundle" && item.bundle && item.bundle.products) {
+          // Check if this bundle contains the product
+          const bundleProduct = item.bundle.products.find(bp => bp.product && bp.product.toString() === productId);
+          if (bundleProduct) {
+            orderContainsProduct = true;
+            // Calculate quantity: bundle quantity * product quantity in bundle
+            orderQuantity += (item.quantity || 0) * (bundleProduct.quantity || 0);
+            
+            // Distribute bundle revenue proportionally
+            const bundleRevenue = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
+            const bundleDiscountedRevenue = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
+            const productCount = item.bundle.products.length;
+            
+            orderRevenue += bundleRevenue / productCount;
+            orderDiscountedRevenue += bundleDiscountedRevenue / productCount;
+            
+            if (!product) {
+              // We'll fetch the actual product details
+              product = { _id: productId };
+            }
+          }
+        }
+      });
+
+      if (orderContainsProduct) {
+        totalOrders += 1;
+        totalQuantity += orderQuantity;
+        totalRevenue += orderRevenue;
+        totalDiscountedRevenue += orderDiscountedRevenue;
+        relevantOrders.push(order);
+      }
+    });
+
+    // Fetch actual product details if not already available
+    if (!product || !product.name) {
+      const productDetails = await Product.findById(productId);
+      if (productDetails) {
+        product = {
+          _id: productDetails._id,
+          name: productDetails.name,
+          price: productDetails.price ? parseFloat(productDetails.price.toString()) : null,
+          discounted_price: productDetails.discounted_price ? parseFloat(productDetails.discounted_price.toString()) : null,
+          banner_image: productDetails.banner_image
+        };
+      }
+    }
+
+    const result = {
+      product,
+      totalOrders,
+      totalQuantity,
+      totalRevenue,
+      totalDiscountedRevenue,
+      orders: relevantOrders
+    };
+
+    return res.status(200).json(
+      new ApiResponse(200, result, "Orders by product ID fetched successfully", true)
+    );
+  } catch (error) {
+    console.error("Error fetching orders by product ID:", error);
+    return res.status(500).json(new ApiResponse(500, null, "Server error", false));
+  }
+});
+
 module.exports = {
   createOrder,
   getOrderHistory,
@@ -320,4 +564,6 @@ module.exports = {
   updateOrder,
   getOrderById,
   editOrder,
+  getProductsWithOrderCounts,
+  getOrdersByProductId,
 };

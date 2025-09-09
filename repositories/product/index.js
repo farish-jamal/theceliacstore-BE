@@ -48,8 +48,10 @@ const getAllProducts = async ({
   if (search) {
     match.name = { $regex: search, $options: "i" };
   }
+
   if (brands) {
     match.brand = { $in: Array.isArray(brands) ? brands : [brands] };
+    console.log("Brand filter applied:", match.brand);
   }
   if (price_range) {
     const priceRanges = Array.isArray(price_range)
@@ -91,7 +93,7 @@ const getAllProducts = async ({
       sortOptions = { createdAt: -1 };
   }
 
-  console.log("match", match);
+
 
   const pipeline = [
     { $match: match },
@@ -120,6 +122,7 @@ const getAllProducts = async ({
   pipeline.push({ $limit: per_page });
 
   const products = await Product.aggregate(pipeline);
+  console.log(products,"<<<<<<<<<<<<<<<<,")
 
   const countPipeline = pipeline.filter(
     (stage) =>
@@ -165,7 +168,7 @@ const getAllProducts = async ({
 };
 
 const getProductById = async (id) => {
-  return await Product.findById(id);
+  return await Product.findById(id).populate('brand');
 };
 
 const createProduct = async (data) => {
@@ -185,6 +188,7 @@ const getProductsByAdmin = async ({ id, filters, page, per_page }) => {
   const limit = parseInt(per_page);
 
   return await Product.find({ ...filters, created_by_admin: id })
+    .populate('brand')
     .sort({
       createdAt: -1,
     })
