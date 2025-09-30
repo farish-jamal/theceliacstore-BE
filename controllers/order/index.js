@@ -11,7 +11,9 @@ const Bundle = require("../../models/bundleModel");
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
   if (!adminId) {
-    return res.status(401).json(new ApiResponse(401, null, "Unauthorized", false));
+    return res
+      .status(401)
+      .json(new ApiResponse(401, null, "Unauthorized", false));
   }
 
   const {
@@ -21,6 +23,7 @@ const getAllOrders = asyncHandler(async (req, res) => {
     search = "",
     start_date,
     end_date,
+    status,
   } = req.query;
 
   try {
@@ -28,18 +31,40 @@ const getAllOrders = asyncHandler(async (req, res) => {
 
     if (service_id) {
       if (!mongoose.Types.ObjectId.isValid(service_id)) {
-        return res.status(400).json(new ApiResponse(400, null, "Invalid service_id format", false));
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, "Invalid service_id format", false));
       }
       const serviceObjectId = new mongoose.Types.ObjectId(service_id);
-      const categoryIds = await Category.find({ service: serviceObjectId }).distinct("_id");
+      const categoryIds = await Category.find({
+        service: serviceObjectId,
+      }).distinct("_id");
       if (categoryIds.length === 0) {
-        return res.status(404).json(new ApiResponse(404, null, "No categories found for this service", false));
+        return res
+          .status(404)
+          .json(
+            new ApiResponse(
+              404,
+              null,
+              "No categories found for this service",
+              false
+            )
+          );
       }
       const productIds = await Product.find({
         sub_category: { $in: categoryIds },
       }).distinct("_id");
       if (productIds.length === 0) {
-        return res.status(404).json(new ApiResponse(404, null, "No products found in these categories", false));
+        return res
+          .status(404)
+          .json(
+            new ApiResponse(
+              404,
+              null,
+              "No products found in these categories",
+              false
+            )
+          );
       }
       query["items.product._id"] = { $in: productIds };
     }
@@ -60,6 +85,10 @@ const getAllOrders = asyncHandler(async (req, res) => {
       if (end_date) query.createdAt.$lte = new Date(end_date);
     }
 
+    if (status) {
+      query.status = status;
+    }
+
     const [orders, total] = await Promise.all([
       Order.find(query)
         .sort({ createdAt: -1 })
@@ -68,17 +97,21 @@ const getAllOrders = asyncHandler(async (req, res) => {
       Order.countDocuments(query),
     ]);
 
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        { data: orders, total },
-        "Orders fetched successfully",
-        true
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { data: orders, total },
+          "Orders fetched successfully",
+          true
+        )
+      );
   } catch (error) {
     console.error("Error fetching orders:", error);
-    return res.status(500).json(new ApiResponse(500, null, "Server error", false));
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Server error", false));
   }
 });
 
@@ -86,17 +119,26 @@ const createOrder = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { cartId, addressId } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(cartId) || !mongoose.Types.ObjectId.isValid(addressId)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid cart or address ID", false));
+  if (
+    !mongoose.Types.ObjectId.isValid(cartId) ||
+    !mongoose.Types.ObjectId.isValid(addressId)
+  ) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid cart or address ID", false));
   }
 
   const cart = await Cart.findOne({ _id: cartId, user: userId });
   if (!cart || cart.items.length === 0) {
-    return res.status(400).json(new ApiResponse(400, null, "Cart not found or empty", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Cart not found or empty", false));
   }
   const address = await Address.findOne({ _id: addressId, user: userId });
   if (!address) {
-    return res.status(400).json(new ApiResponse(400, null, "Address not found", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Address not found", false));
   }
 
   let totalAmount = 0;
@@ -107,7 +149,9 @@ const createOrder = asyncHandler(async (req, res) => {
       const product = await Product.findById(cartItem.product);
       if (!product) continue;
       const price = parseFloat(product.price.toString());
-      const discountedPrice = product.discounted_price ? parseFloat(product.discounted_price.toString()) : price;
+      const discountedPrice = product.discounted_price
+        ? parseFloat(product.discounted_price.toString())
+        : price;
       const itemTotal = price * cartItem.quantity;
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
@@ -130,7 +174,9 @@ const createOrder = asyncHandler(async (req, res) => {
       const bundle = await Bundle.findById(cartItem.bundle);
       if (!bundle) continue;
       const price = parseFloat(bundle.price.toString());
-      const discountedPrice = bundle.discounted_price ? parseFloat(bundle.discounted_price.toString()) : price;
+      const discountedPrice = bundle.discounted_price
+        ? parseFloat(bundle.discounted_price.toString())
+        : price;
       const itemTotal = price * cartItem.quantity;
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
@@ -173,62 +219,177 @@ const createOrder = asyncHandler(async (req, res) => {
   cart.items = [];
   await cart.save();
 
-  return res.status(201).json(
-    new ApiResponse(201, order, "Order created successfully", true)
-  );
+  return res
+    .status(201)
+    .json(new ApiResponse(201, order, "Order created successfully", true));
 });
 
 const getOrderHistory = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const [orders, total] = await Promise.all([
     Order.find({ user: userId }).sort({ createdAt: -1 }),
-    Order.countDocuments({ user: userId })
+    Order.countDocuments({ user: userId }),
   ]);
-  return res.status(200).json(new ApiResponse(200, { data: orders, total }, "Orders fetched successfully", true));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { data: orders, total },
+        "Orders fetched successfully",
+        true
+      )
+    );
 });
 
 const updateOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid order ID", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
   }
   const order = await Order.findById(id);
   if (!order) {
-    return res.status(404).json(new ApiResponse(404, null, "Order not found", false));
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
   }
   const { status } = req.body;
   if (!status) {
-    return res.status(400).json(new ApiResponse(400, null, "Status is required", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Status is required", false));
   }
   order.status = status;
   await order.save();
-  return res.status(200).json(new ApiResponse(200, order, "Order status updated successfully", true));
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, order, "Order status updated successfully", true)
+    );
+});
+
+const updateOrderStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
+  }
+
+  if (!status) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Status is required", false));
+  }
+
+  // Validate status values
+  const validStatuses = [
+    "pending",
+    "confirmed",
+    "processing",
+    "shipped",
+    "delivered",
+    "cancelled",
+  ];
+  if (!validStatuses.includes(status)) {
+    return res
+      .status(400)
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          false
+        )
+      );
+  }
+
+  const order = await Order.findById(id);
+  if (!order) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
+  }
+
+  // Check if status transition is valid (optional business logic)
+  const currentStatus = order.status;
+  const statusTransitions = {
+    pending: ["confirmed", "cancelled"],
+    confirmed: ["processing", "cancelled"],
+    processing: ["shipped", "cancelled"],
+    shipped: ["delivered"],
+    delivered: [], // Final state
+    cancelled: [], // Final state
+  };
+
+  if (
+    statusTransitions[currentStatus] &&
+    !statusTransitions[currentStatus].includes(status)
+  ) {
+    return res
+      .status(400)
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          `Cannot change status from ${currentStatus} to ${status}`,
+          false
+        )
+      );
+  }
+
+  order.status = status;
+  await order.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, order, "Order status updated successfully", true)
+    );
 });
 
 const getOrderById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid order ID", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
   }
   const order = await Order.findById(id);
   if (!order) {
-    return res.status(404).json(new ApiResponse(404, null, "Order not found", false));
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
   }
-  return res.status(200).json(new ApiResponse(200, order, "Order fetched successfully", true));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, order, "Order fetched successfully", true));
 });
 
 const editOrder = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid order ID", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
   }
   const order = await Order.findOne({ _id: id, user: userId });
   if (!order) {
-    return res.status(404).json(new ApiResponse(404, null, "Order not found", false));
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
   }
   if (order.status !== "pending") {
-    return res.status(400).json(new ApiResponse(400, null, "Only pending orders can be edited", false));
+    return res
+      .status(400)
+      .json(
+        new ApiResponse(400, null, "Only pending orders can be edited", false)
+      );
   }
 
   const { addressId, items } = req.body;
@@ -236,7 +397,9 @@ const editOrder = asyncHandler(async (req, res) => {
   if (addressId) {
     const address = await Address.findOne({ _id: addressId, user: userId });
     if (!address) {
-      return res.status(400).json(new ApiResponse(400, null, "Address not found", false));
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Address not found", false));
     }
     addressSnapshot = { ...address.toObject() };
     delete addressSnapshot._id;
@@ -255,7 +418,9 @@ const editOrder = asyncHandler(async (req, res) => {
         const product = await Product.findById(item.product);
         if (!product) continue;
         const price = parseFloat(product.price.toString());
-        const discountedPrice = product.discounted_price ? parseFloat(product.discounted_price.toString()) : price;
+        const discountedPrice = product.discounted_price
+          ? parseFloat(product.discounted_price.toString())
+          : price;
         const itemTotal = price * item.quantity;
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
@@ -278,7 +443,9 @@ const editOrder = asyncHandler(async (req, res) => {
         const bundle = await Bundle.findById(item.bundle);
         if (!bundle) continue;
         const price = parseFloat(bundle.price.toString());
-        const discountedPrice = bundle.discounted_price ? parseFloat(bundle.discounted_price.toString()) : price;
+        const discountedPrice = bundle.discounted_price
+          ? parseFloat(bundle.discounted_price.toString())
+          : price;
         const itemTotal = price * item.quantity;
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
@@ -310,60 +477,104 @@ const editOrder = asyncHandler(async (req, res) => {
   order.address = addressSnapshot;
   await order.save();
 
-  return res.status(200).json(new ApiResponse(200, order, "Order updated successfully", true));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, order, "Order updated successfully", true));
 });
 
 const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
   try {
-    const orders = await Order.find({});
+    const {
+      page = 1,
+      per_page = 50,
+      search = "",
+      status = "",
+      sort_by = "totalOrders", // totalOrders, totalQuantity, totalRevenue, totalDiscountedRevenue
+      sort_order = "desc", // asc, desc
+    } = req.query;
+
+    // Build query for orders based on status filter
+    let orderQuery = {};
+    if (status) {
+      const validStatuses = [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+      ];
+      if (validStatuses.includes(status)) {
+        orderQuery.status = status;
+      }
+    }
+
+    // Get orders with status filter
+    const orders = await Order.find(orderQuery);
     const productOrderMap = {};
 
-    // Iterate through all orders and count by product
-    orders.forEach(order => {
-      order.items.forEach(item => {
+    // Iterate through filtered orders and count by product
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
         if (item.type === "product" && item.product && item.product._id) {
           // Handle individual products
           const productId = item.product._id.toString();
-          
+
           if (!productOrderMap[productId]) {
             // Convert Decimal128 fields to numbers for direct products
             productOrderMap[productId] = {
               product: {
                 _id: item.product._id,
                 name: item.product.name,
-                price: item.product.price ? parseFloat(item.product.price.toString()) : null,
-                discounted_price: item.product.discounted_price ? parseFloat(item.product.discounted_price.toString()) : null,
-                banner_image: item.product.banner_image
+                sku: item.product.sku,
+                price: item.product.price
+                  ? parseFloat(item.product.price.toString())
+                  : null,
+                discounted_price: item.product.discounted_price
+                  ? parseFloat(item.product.discounted_price.toString())
+                  : null,
+                banner_image: item.product.banner_image,
               },
               totalOrders: 0,
               totalQuantity: 0,
               totalRevenue: 0,
-              totalDiscountedRevenue: 0
+              totalDiscountedRevenue: 0,
             };
           }
-          
+
           productOrderMap[productId].totalOrders += 1;
           productOrderMap[productId].totalQuantity += item.quantity || 0;
-          
+
           // Safe parsing with null checks
-          const totalAmount = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
-          const discountedTotalAmount = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
-          
+          const totalAmount = item.total_amount
+            ? parseFloat(item.total_amount.toString())
+            : 0;
+          const discountedTotalAmount = item.discounted_total_amount
+            ? parseFloat(item.discounted_total_amount.toString())
+            : 0;
+
           // If discounted_total_amount is 0 or null, calculate it from the product's discounted price
           let finalDiscountedAmount = discountedTotalAmount;
           if (discountedTotalAmount === 0 && item.product.discounted_price) {
-            const productDiscountedPrice = parseFloat(item.product.discounted_price.toString());
+            const productDiscountedPrice = parseFloat(
+              item.product.discounted_price.toString()
+            );
             const productQuantity = item.quantity || 0;
             finalDiscountedAmount = productDiscountedPrice * productQuantity;
           }
-          
+
           productOrderMap[productId].totalRevenue += totalAmount;
-          productOrderMap[productId].totalDiscountedRevenue += finalDiscountedAmount;
-        } else if (item.type === "bundle" && item.bundle && item.bundle.products) {
+          productOrderMap[productId].totalDiscountedRevenue +=
+            finalDiscountedAmount;
+        } else if (
+          item.type === "bundle" &&
+          item.bundle &&
+          item.bundle.products
+        ) {
           // Handle bundles - extract individual products from bundles
-          item.bundle.products.forEach(bundleProduct => {
+          item.bundle.products.forEach((bundleProduct) => {
             const productId = bundleProduct.product.toString();
-            
+
             if (!productOrderMap[productId]) {
               productOrderMap[productId] = {
                 product: {
@@ -374,25 +585,32 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
                 totalOrders: 0,
                 totalQuantity: 0,
                 totalRevenue: 0,
-                totalDiscountedRevenue: 0
+                totalDiscountedRevenue: 0,
               };
             }
-            
+
             // Calculate quantity: bundle quantity * product quantity in bundle
-            const totalProductQuantity = (item.quantity || 0) * (bundleProduct.quantity || 0);
-            
+            const totalProductQuantity =
+              (item.quantity || 0) * (bundleProduct.quantity || 0);
+
             productOrderMap[productId].totalOrders += 1;
             productOrderMap[productId].totalQuantity += totalProductQuantity;
-            
+
             // For bundles, we can't directly calculate individual product revenue
             // So we'll distribute bundle revenue proportionally
-            const bundleRevenue = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
-            const bundleDiscountedRevenue = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
-            
+            const bundleRevenue = item.total_amount
+              ? parseFloat(item.total_amount.toString())
+              : 0;
+            const bundleDiscountedRevenue = item.discounted_total_amount
+              ? parseFloat(item.discounted_total_amount.toString())
+              : 0;
+
             // Simple proportional distribution (you might want to improve this logic)
             const productCount = item.bundle.products.length;
-            productOrderMap[productId].totalRevenue += bundleRevenue / productCount;
-            productOrderMap[productId].totalDiscountedRevenue += bundleDiscountedRevenue / productCount;
+            productOrderMap[productId].totalRevenue +=
+              bundleRevenue / productCount;
+            productOrderMap[productId].totalDiscountedRevenue +=
+              bundleDiscountedRevenue / productCount;
           });
         }
       });
@@ -400,52 +618,115 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
 
     // Fetch actual product details for products that came from bundles
     for (const productId in productOrderMap) {
-      if (productOrderMap[productId].product.name && productOrderMap[productId].product.name.startsWith('Product from Bundle:')) {
+      if (
+        productOrderMap[productId].product.name &&
+        productOrderMap[productId].product.name.startsWith(
+          "Product from Bundle:"
+        )
+      ) {
         const product = await Product.findById(productId);
         if (product) {
           productOrderMap[productId].product = {
             _id: product._id,
             name: product.name,
+            sku: product.sku,
             price: product.price ? parseFloat(product.price.toString()) : null,
-            discounted_price: product.discounted_price ? parseFloat(product.discounted_price.toString()) : null,
-            banner_image: product.banner_image
+            discounted_price: product.discounted_price
+              ? parseFloat(product.discounted_price.toString())
+              : null,
+            banner_image: product.banner_image,
           };
         }
       }
     }
 
-    const result = Object.values(productOrderMap);
-    
+    // Convert to array and apply search filter
+    let result = Object.values(productOrderMap);
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchLower = search.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.product.name.toLowerCase().includes(searchLower) ||
+          (item.product.sku &&
+            item.product.sku.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Apply sorting
+    const validSortFields = [
+      "totalOrders",
+      "totalQuantity",
+      "totalRevenue",
+      "totalDiscountedRevenue",
+    ];
+    const sortField = validSortFields.includes(sort_by)
+      ? sort_by
+      : "totalOrders";
+    const sortDirection = sort_order === "asc" ? 1 : -1;
+
+    result.sort((a, b) => {
+      const aValue = a[sortField] || 0;
+      const bValue = b[sortField] || 0;
+      return (aValue - bValue) * sortDirection;
+    });
+
+    // Apply pagination
+    const total = result.length;
+    const startIndex = (page - 1) * per_page;
+    const endIndex = startIndex + parseInt(per_page, 10);
+    const paginatedResult = result.slice(startIndex, endIndex);
+
     return res.status(200).json(
-      new ApiResponse(200, result, "Products with order counts fetched successfully", true)
+      new ApiResponse(
+        200,
+        {
+          data: paginatedResult,
+          total,
+        },
+        "Products with order counts fetched successfully",
+        true
+      )
     );
   } catch (error) {
     console.error("Error fetching products with order counts:", error);
-    return res.status(500).json(new ApiResponse(500, null, "Server error", false));
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Server error", false));
   }
 });
 
 const getOrdersByProductId = asyncHandler(async (req, res) => {
   const { productId } = req.params;
-  
+  const { status } = req.query;
+
   if (!mongoose.Types.ObjectId.isValid(productId)) {
-    return res.status(400).json(new ApiResponse(400, null, "Invalid product ID", false));
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid product ID", false));
   }
 
   try {
+    // Build the base query
+    const baseOr = [
+      {
+        "items.type": "product",
+        "items.product._id": new mongoose.Types.ObjectId(productId),
+      },
+      {
+        "items.type": "bundle",
+        "items.bundle.products.product": new mongoose.Types.ObjectId(productId),
+      },
+    ];
+
+    // If status is provided, add it to the query
+    const query = status
+      ? { $and: [{ $or: baseOr }, { status }] }
+      : { $or: baseOr };
+
     // Find orders that contain this product either directly or in bundles
-    const orders = await Order.find({
-      $or: [
-        {
-          "items.type": "product",
-          "items.product._id": new mongoose.Types.ObjectId(productId)
-        },
-        {
-          "items.type": "bundle",
-          "items.bundle.products.product": new mongoose.Types.ObjectId(productId)
-        }
-      ]
-    });
+    const orders = await Order.find(query);
 
     let totalOrders = 0;
     let totalQuantity = 0;
@@ -455,59 +736,86 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
     const relevantOrders = [];
 
     // Calculate stats and get product info
-    orders.forEach(order => {
+    orders.forEach((order) => {
       let orderContainsProduct = false;
       let orderQuantity = 0;
       let orderRevenue = 0;
       let orderDiscountedRevenue = 0;
 
-      order.items.forEach(item => {
-        if (item.type === "product" && item.product && item.product._id && item.product._id.toString() === productId) {
+      order.items.forEach((item) => {
+        if (
+          item.type === "product" &&
+          item.product &&
+          item.product._id &&
+          item.product._id.toString() === productId
+        ) {
           // Direct product order
           orderContainsProduct = true;
           orderQuantity += item.quantity || 0;
-          
+
           // Safe parsing with null checks
-          const totalAmount = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
-          const discountedTotalAmount = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
-          
+          const totalAmount = item.total_amount
+            ? parseFloat(item.total_amount.toString())
+            : 0;
+          const discountedTotalAmount = item.discounted_total_amount
+            ? parseFloat(item.discounted_total_amount.toString())
+            : 0;
+
           // If discounted_total_amount is 0 or null, calculate it from the product's discounted price
           let finalDiscountedAmount = discountedTotalAmount;
           if (discountedTotalAmount === 0 && item.product.discounted_price) {
-            const productDiscountedPrice = parseFloat(item.product.discounted_price.toString());
+            const productDiscountedPrice = parseFloat(
+              item.product.discounted_price.toString()
+            );
             const productQuantity = item.quantity || 0;
             finalDiscountedAmount = productDiscountedPrice * productQuantity;
           }
-          
+
           orderRevenue += totalAmount;
           orderDiscountedRevenue += finalDiscountedAmount;
-          
+
           if (!product) {
             // Convert Decimal128 fields to numbers for product details
             product = {
               _id: item.product._id,
               name: item.product.name,
-              price: item.product.price ? parseFloat(item.product.price.toString()) : null,
-              discounted_price: item.product.discounted_price ? parseFloat(item.product.discounted_price.toString()) : null,
-              banner_image: item.product.banner_image
+              sku: item.product.sku,
+              price: item.product.price
+                ? parseFloat(item.product.price.toString())
+                : null,
+              discounted_price: item.product.discounted_price
+                ? parseFloat(item.product.discounted_price.toString())
+                : null,
+              banner_image: item.product.banner_image,
             };
           }
-        } else if (item.type === "bundle" && item.bundle && item.bundle.products) {
+        } else if (
+          item.type === "bundle" &&
+          item.bundle &&
+          item.bundle.products
+        ) {
           // Check if this bundle contains the product
-          const bundleProduct = item.bundle.products.find(bp => bp.product && bp.product.toString() === productId);
+          const bundleProduct = item.bundle.products.find(
+            (bp) => bp.product && bp.product.toString() === productId
+          );
           if (bundleProduct) {
             orderContainsProduct = true;
             // Calculate quantity: bundle quantity * product quantity in bundle
-            orderQuantity += (item.quantity || 0) * (bundleProduct.quantity || 0);
-            
+            orderQuantity +=
+              (item.quantity || 0) * (bundleProduct.quantity || 0);
+
             // Distribute bundle revenue proportionally
-            const bundleRevenue = item.total_amount ? parseFloat(item.total_amount.toString()) : 0;
-            const bundleDiscountedRevenue = item.discounted_total_amount ? parseFloat(item.discounted_total_amount.toString()) : 0;
+            const bundleRevenue = item.total_amount
+              ? parseFloat(item.total_amount.toString())
+              : 0;
+            const bundleDiscountedRevenue = item.discounted_total_amount
+              ? parseFloat(item.discounted_total_amount.toString())
+              : 0;
             const productCount = item.bundle.products.length;
-            
+
             orderRevenue += bundleRevenue / productCount;
             orderDiscountedRevenue += bundleDiscountedRevenue / productCount;
-            
+
             if (!product) {
               // We'll fetch the actual product details
               product = { _id: productId };
@@ -532,9 +840,14 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
         product = {
           _id: productDetails._id,
           name: productDetails.name,
-          price: productDetails.price ? parseFloat(productDetails.price.toString()) : null,
-          discounted_price: productDetails.discounted_price ? parseFloat(productDetails.discounted_price.toString()) : null,
-          banner_image: productDetails.banner_image
+          sku: productDetails.sku,
+          price: productDetails.price
+            ? parseFloat(productDetails.price.toString())
+            : null,
+          discounted_price: productDetails.discounted_price
+            ? parseFloat(productDetails.discounted_price.toString())
+            : null,
+          banner_image: productDetails.banner_image,
         };
       }
     }
@@ -545,15 +858,24 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
       totalQuantity,
       totalRevenue,
       totalDiscountedRevenue,
-      orders: relevantOrders
+      orders: relevantOrders,
     };
 
-    return res.status(200).json(
-      new ApiResponse(200, result, "Orders by product ID fetched successfully", true)
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          result,
+          "Orders by product ID fetched successfully",
+          true
+        )
+      );
   } catch (error) {
     console.error("Error fetching orders by product ID:", error);
-    return res.status(500).json(new ApiResponse(500, null, "Server error", false));
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Server error", false));
   }
 });
 
@@ -562,6 +884,7 @@ module.exports = {
   getOrderHistory,
   getAllOrders,
   updateOrder,
+  updateOrderStatus,
   getOrderById,
   editOrder,
   getProductsWithOrderCounts,

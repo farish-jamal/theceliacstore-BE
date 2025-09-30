@@ -56,6 +56,7 @@ const getAllBundles = asyncHandler(async (req, res) => {
         convertedBundle.products = convertedBundle.products.map(product => {
           const convertedProduct = {
             ...product,
+            sku: product.sku,
             price: product.price && typeof product.price === 'object' && product.price.$numberDecimal 
               ? parseFloat(product.price.$numberDecimal) 
               : (product.price && typeof product.price === 'object' ? parseFloat(product.price.toString()) : product.price),

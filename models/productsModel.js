@@ -7,6 +7,12 @@ const ProductSchema = new mongoose.Schema(
       required: true,
       maxlength: 255,
     },
+    sku: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
     small_description: {
       type: String,
     },

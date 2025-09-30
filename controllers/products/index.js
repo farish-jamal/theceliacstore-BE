@@ -41,6 +41,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
     products.data = products.data.map((product) => {
       const convertedProduct = {
         ...product,
+        sku: product.sku,
         price:
           product.price &&
           typeof product.price === "object" &&
@@ -117,6 +118,16 @@ const createProduct = asyncHandler(async (req, res) => {
 
   if (!images.length && !bannerImageFile) {
     return res.json(new ApiResponse(404, null, "No Images Found", false));
+  }
+
+  // SKU validation
+  if (!req.body.sku || typeof req.body.sku !== "string" || !req.body.sku.trim()) {
+    return res.status(400).json(new ApiResponse(400, null, "SKU is required and must be a non-empty string", false));
+  }
+  // Check uniqueness
+  const existing = await Product.findOne({ sku: req.body.sku.trim() });
+  if (existing) {
+    return res.status(400).json(new ApiResponse(400, null, "SKU must be unique. This SKU already exists.", false));
   }
 
   const imageUrls = images.length

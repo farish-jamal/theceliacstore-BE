@@ -16,6 +16,7 @@ router.get("/history", user, OrderController.getOrderHistory);
 router.get("/products-with-orders", adminOrSuperAdmin, OrderController.getProductsWithOrderCounts);
 router.get("/by-product/:productId", adminOrSuperAdmin, OrderController.getOrdersByProductId);
 router.patch("/:id", adminOrSuperAdmin, OrderController.updateOrder);
+router.patch("/:id/status", adminOrSuperAdmin, OrderController.updateOrderStatus);
 router.patch("/edit/:id", user, OrderController.editOrder);
 router.get("/:id", adminOrSuperAdmin, OrderController.getOrderById);
 // router.get("/generate-order-bill/:id", user, OrderController.generateOrderBill);
