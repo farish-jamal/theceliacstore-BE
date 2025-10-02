@@ -705,33 +705,6 @@ const updateOrder = asyncHandler(async (req, res) => {
           .json(new ApiResponse(400, null, "Invalid status", false));
       }
 
-      // Check status transition validity
-      const currentStatus = order.status;
-      const statusTransitions = {
-        pending: ["confirmed", "cancelled"],
-        confirmed: ["processing", "cancelled"],
-        processing: ["shipped", "cancelled"],
-        shipped: ["delivered"],
-        delivered: [],
-        cancelled: [],
-      };
-
-      if (
-        statusTransitions[currentStatus] &&
-        !statusTransitions[currentStatus].includes(updateData.status)
-      ) {
-        return res
-          .status(400)
-          .json(
-            new ApiResponse(
-              400,
-              null,
-              `Cannot change status from ${currentStatus} to ${updateData.status}`,
-              false
-            )
-          );
-      }
-
       order.status = updateData.status;
     }
 
