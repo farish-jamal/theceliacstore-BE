@@ -257,6 +257,45 @@ const processTagsField = (productData) => {
   return [];
 };
 
+// Helper function to detect template/header rows
+const isTemplateRow = (productData) => {
+  const name = productData.name?.toString().toLowerCase().trim();
+  
+  // Check for common template patterns
+  const templatePatterns = [
+    'product name (required)',
+    'product name',
+    'name (required)',
+    'required',
+    'template',
+    'header',
+    'example'
+  ];
+  
+  return templatePatterns.some(pattern => name?.includes(pattern)) || 
+         !name || 
+         name === '' ||
+         productData.price === 0 && !productData.discounted_price;
+};
+
+// Helper function to create missing brand
+const createMissingBrand = async (brandName) => {
+  if (!brandName) return null;
+  
+  try {
+    const brand = new Brand({
+      name: brandName,
+      is_active: true
+    });
+    
+    await brand.save();
+    return brand._id;
+  } catch (error) {
+    console.error('Error creating brand:', error);
+    return null;
+  }
+};
+
 // Helper function to generate SKU from product name following industry standards
 const generateSku = async (productName, brandName = '', subCategoryName = '') => {
   if (!productName) {
@@ -330,6 +369,11 @@ const bulkCreateProducts = async (products, adminId) => {
 
   for (const [index, productData] of products.entries()) {
     try {
+      // Skip template/header rows
+      if (isTemplateRow(productData)) {
+        continue;
+      }
+
       if (!productData.name || !productData.price || !productData.sub_category) {
         throw new Error("Missing required fields (name, price, or sub_category)");
       }
@@ -341,11 +385,17 @@ const bulkCreateProducts = async (products, adminId) => {
         throw new Error(`Subcategory not found: "${productData.sub_category}". Please check the name or ID.`);
       }
 
-      // Find brand by ID or name
-      const brandId = await findBrand(productData.brand || productData.manufacturer);
+      // Find brand by ID or name, create if missing
+      let brandId = await findBrand(productData.brand || productData.manufacturer);
 
       if (!brandId) {
-        throw new Error(`Brand not found: "${productData.brand || productData.manufacturer}". Please check the name or ID.`);
+        // Try to create the brand if it doesn't exist
+        const brandName = productData.brand || productData.manufacturer;
+        brandId = await createMissingBrand(brandName);
+        
+        if (!brandId) {
+          throw new Error(`Brand not found and could not be created: "${brandName}". Please check the name or ID.`);
+        }
       }
 
       // Get brand and subcategory names for SKU generation
@@ -490,11 +540,7 @@ const bulkCreateProducts = async (products, adminId) => {
       validProducts.push({
         ...processedProduct,
         created_by_admin: adminId,
-      });
-
-      results.success.push({
-        index,
-        name: productData.name,
+        originalIndex: index, // Store original index for success tracking
       });
     } catch (error) {
       results.failed.push({
@@ -510,13 +556,23 @@ const bulkCreateProducts = async (products, adminId) => {
       const insertedProducts = await ProductsRepository.bulkCreateProducts(
         validProducts
       );
+      
+      // Map inserted products back to their original indices
       results.success = insertedProducts.map((product, i) => ({
-        index: i,
+        index: validProducts[i].originalIndex,
         _id: product._id,
         name: product.name,
+        sku: product.sku,
       }));
     } catch (error) {
-      results.failed.push({ error: error.message });
+      // If bulk insert fails, add all valid products to failed list
+      validProducts.forEach(validProduct => {
+        results.failed.push({
+          index: validProduct.originalIndex,
+          name: validProduct.name,
+          error: error.message,
+        });
+      });
     }
   }
 
