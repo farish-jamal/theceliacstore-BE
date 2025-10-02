@@ -372,10 +372,10 @@ const bulkCreateProducts = async (products, adminId) => {
       console.log(`Processing product ${index}: ${productData.name}`);
 
       // Check if this is a template row (even though filtering is commented out)
-      if (isTemplateRow(productData)) {
-        console.log(`Skipping template row ${index}: ${productData.name}`);
-        continue;
-      }
+      // if (isTemplateRow(productData)) {
+      //   console.log(`Skipping template row ${index}: ${productData.name}`);
+      //   continue;
+      // }
 
       if (!productData.name || !productData.price || !productData.sub_category) {
         throw new Error("Missing required fields (name, price, or sub_category)");
