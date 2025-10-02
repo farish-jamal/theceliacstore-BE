@@ -55,6 +55,16 @@ const ProductSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    status: {
+      type: String,
+      enum: ["published", "draft"],
+      default: "draft",
+    },
+    weight_in_grams: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
     manufacturer: {
       type: String,
       maxlength: 255,
