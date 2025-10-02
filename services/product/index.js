@@ -257,6 +257,69 @@ const processTagsField = (productData) => {
   return [];
 };
 
+// Helper function to generate SKU from product name following industry standards
+const generateSku = async (productName, brandName = '', subCategoryName = '') => {
+  if (!productName) {
+    throw new Error("Product name is required to generate SKU");
+  }
+
+  // Clean and format brand name (max 8 chars for industry standard)
+  const cleanBrand = brandName
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '') // Remove special characters
+    .substring(0, 8);
+
+  const cleanCategory = subCategoryName
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .substring(0, 6);
+
+  const cleanName = productName
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, '') 
+    .replace(/\s+/g, '') 
+    .substring(0, 12);
+
+  const sizeMatch = productName.match(/(\d+)\s*(g|kg|ml|l|gm|gms|kgs|mls|ls)/i);
+  const sizeSuffix = sizeMatch ? sizeMatch[0].replace(/\s/g, '').toUpperCase() : '';
+
+  const parts = [];
+  
+  if (cleanBrand) parts.push(cleanBrand);
+  if (cleanCategory) parts.push(cleanCategory);
+  parts.push(cleanName);
+  if (sizeSuffix) parts.push(sizeSuffix);
+
+  let baseSku = parts.join('-');
+  
+  if (baseSku.length > 25) {
+    baseSku = baseSku.substring(0, 25);
+  }
+
+  let sku = baseSku;
+  let counter = 1;
+  
+  while (await Product.findOne({ sku })) {
+    const suffix = counter.toString().padStart(2, '0'); 
+    sku = `${baseSku}-${suffix}`;
+    counter++;
+    
+    // Prevent infinite loop
+    if (counter > 99) {
+      sku = `${baseSku}-${Date.now().toString().slice(-4)}`;
+      break;
+    }
+  }
+
+  return sku;
+};
+
 const bulkCreateProducts = async (products, adminId) => {
   const results = {
     success: [],
@@ -271,12 +334,6 @@ const bulkCreateProducts = async (products, adminId) => {
         throw new Error("Missing required fields (name, price, or sub_category)");
       }
 
-      // Process SKU field
-      const skuValue = processSkuField(productData);
-      if (!skuValue) {
-        throw new Error("SKU is required");
-      }
-
       // Find subcategory by ID or name
       const subCategoryId = await findSubCategory(productData.sub_category);
 
@@ -289,6 +346,21 @@ const bulkCreateProducts = async (products, adminId) => {
 
       if (!brandId) {
         throw new Error(`Brand not found: "${productData.brand || productData.manufacturer}". Please check the name or ID.`);
+      }
+
+      // Get brand and subcategory names for SKU generation
+      const brand = await Brand.findById(brandId);
+      const brandName = brand ? brand.name : '';
+      
+      const subCategory = await SubCategory.findById(subCategoryId);
+      const subCategoryName = subCategory ? subCategory.name : '';
+
+      // Process SKU field - generate if missing
+      let skuValue = processSkuField(productData);
+      
+      if (!skuValue) {
+        // Generate SKU from product name, brand, and subcategory
+        skuValue = await generateSku(productData.name, brandName, subCategoryName);
       }
 
       // Check for existing product with same SKU
