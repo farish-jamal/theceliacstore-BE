@@ -369,10 +369,10 @@ const bulkCreateProducts = async (products, adminId) => {
 
   for (const [index, productData] of products.entries()) {
     try {
-      // Skip template/header rows
-      if (isTemplateRow(productData)) {
-        continue;
-      }
+      // // Skip template/header rows
+      // if (isTemplateRow(productData)) {
+      //   continue;
+      // }
 
       if (!productData.name || !productData.price || !productData.sub_category) {
         throw new Error("Missing required fields (name, price, or sub_category)");
