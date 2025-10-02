@@ -337,21 +337,21 @@ const generateSku = async (productName, brandName = '', subCategoryName = '') =>
 
   let baseSku = parts.join('-');
   
-  if (baseSku.length > 25) {
-    baseSku = baseSku.substring(0, 25);
+  if (baseSku.length > 20) { // Reduced from 25 to account for "SKU-" prefix
+    baseSku = baseSku.substring(0, 20);
   }
 
-  let sku = baseSku;
+  let sku = `SKU-${baseSku}`;
   let counter = 1;
   
   while (await Product.findOne({ sku })) {
     const suffix = counter.toString().padStart(2, '0'); 
-    sku = `${baseSku}-${suffix}`;
+    sku = `SKU-${baseSku}-${suffix}`;
     counter++;
     
     // Prevent infinite loop
     if (counter > 99) {
-      sku = `${baseSku}-${Date.now().toString().slice(-4)}`;
+      sku = `SKU-${baseSku}-${Date.now().toString().slice(-4)}`;
       break;
     }
   }
