@@ -5,7 +5,6 @@ const ProductSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      maxlength: 255,
     },
     sku: {
       type: String,
@@ -67,11 +66,9 @@ const ProductSchema = new mongoose.Schema(
     },
     manufacturer: {
       type: String,
-      maxlength: 255,
     },
     consumed_type: {
       type: String,
-      maxlength: 255,
     },
     banner_image: {
       type: String,
