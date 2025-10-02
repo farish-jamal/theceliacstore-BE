@@ -242,34 +242,6 @@ const getOrderHistory = asyncHandler(async (req, res) => {
     );
 });
 
-const updateOrder = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, null, "Invalid order ID", false));
-  }
-  const order = await Order.findById(id);
-  if (!order) {
-    return res
-      .status(404)
-      .json(new ApiResponse(404, null, "Order not found", false));
-  }
-  const { status } = req.body;
-  if (!status) {
-    return res
-      .status(400)
-      .json(new ApiResponse(400, null, "Status is required", false));
-  }
-  order.status = status;
-  await order.save();
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, order, "Order status updated successfully", true)
-    );
-});
-
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
@@ -694,6 +666,279 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
     return res
       .status(500)
       .json(new ApiResponse(500, null, "Server error", false));
+  }
+});
+
+// Order update function with safe field updates
+const updateOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
+  }
+
+  const order = await Order.findById(id);
+  if (!order) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
+  }
+
+  try {
+    // Update status if provided
+    if (updateData.status) {
+      const validStatuses = [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+      ];
+
+      if (!validStatuses.includes(updateData.status)) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, "Invalid status", false));
+      }
+
+      // Check status transition validity
+      const currentStatus = order.status;
+      const statusTransitions = {
+        pending: ["confirmed", "cancelled"],
+        confirmed: ["processing", "cancelled"],
+        processing: ["shipped", "cancelled"],
+        shipped: ["delivered"],
+        delivered: [],
+        cancelled: [],
+      };
+
+      if (
+        statusTransitions[currentStatus] &&
+        !statusTransitions[currentStatus].includes(updateData.status)
+      ) {
+        return res
+          .status(400)
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              `Cannot change status from ${currentStatus} to ${updateData.status}`,
+              false
+            )
+          );
+      }
+
+      order.status = updateData.status;
+    }
+
+    if (updateData.addressId) {
+      const address = await Address.findById(updateData.addressId);
+      if (!address) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, "Address not found", false));
+      }
+
+      // Create address snapshot
+      const addressSnapshot = { ...address.toObject() };
+      delete addressSnapshot._id;
+      delete addressSnapshot.user;
+      delete addressSnapshot.createdAt;
+      delete addressSnapshot.updatedAt;
+      delete addressSnapshot.__v;
+
+      order.address = addressSnapshot;
+    }
+
+    // Update multiple products and bundles
+    if (updateData.products && Array.isArray(updateData.products)) {
+      for (const productUpdate of updateData.products) {
+        const { productId, newQuantity } = productUpdate;
+        const quantity = parseInt(newQuantity);
+
+        if (quantity < 0) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Quantity cannot be negative for product ${productId}`,
+                false
+              )
+            );
+        }
+
+        // Find the product in order items
+        const itemIndex = order.items.findIndex(
+          (item) =>
+            item.type === "product" && item.product._id.toString() === productId
+        );
+
+        if (itemIndex === -1) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Product ${productId} not found in order`,
+                false
+              )
+            );
+        }
+
+        if (quantity === 0) {
+          // Remove item from order
+          order.items.splice(itemIndex, 1);
+        } else {
+          // Update quantity
+          const product = await Product.findById(productId);
+          if (!product) {
+            return res
+              .status(400)
+              .json(
+                new ApiResponse(
+                  400,
+                  null,
+                  `Product ${productId} not found`,
+                  false
+                )
+              );
+          }
+
+          const price = parseFloat(product.price.toString());
+          const discountedPrice = product.discounted_price
+            ? parseFloat(product.discounted_price.toString())
+            : price;
+          const itemTotal = price * quantity;
+          const discountedItemTotal = discountedPrice * quantity;
+
+          order.items[itemIndex].quantity = quantity;
+          order.items[itemIndex].total_amount =
+            mongoose.Types.Decimal128.fromString(itemTotal.toString());
+          order.items[itemIndex].discounted_total_amount =
+            mongoose.Types.Decimal128.fromString(
+              discountedItemTotal.toString()
+            );
+        }
+      }
+    }
+
+    // Update multiple bundles
+    if (updateData.bundles && Array.isArray(updateData.bundles)) {
+      for (const bundleUpdate of updateData.bundles) {
+        const { bundleId, newQuantity } = bundleUpdate;
+        const quantity = parseInt(newQuantity);
+
+        if (quantity < 0) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Quantity cannot be negative for bundle ${bundleId}`,
+                false
+              )
+            );
+        }
+
+        // Find the bundle in order items
+        const itemIndex = order.items.findIndex(
+          (item) =>
+            item.type === "bundle" && item.bundle._id.toString() === bundleId
+        );
+
+        if (itemIndex === -1) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Bundle ${bundleId} not found in order`,
+                false
+              )
+            );
+        }
+
+        if (quantity === 0) {
+          // Remove item from order
+          order.items.splice(itemIndex, 1);
+        } else {
+          // Update quantity
+          const bundle = await Bundle.findById(bundleId);
+          if (!bundle) {
+            return res
+              .status(400)
+              .json(
+                new ApiResponse(
+                  400,
+                  null,
+                  `Bundle ${bundleId} not found`,
+                  false
+                )
+              );
+          }
+
+          const price = parseFloat(bundle.price.toString());
+          const discountedPrice = bundle.discounted_price
+            ? parseFloat(bundle.discounted_price.toString())
+            : price;
+          const itemTotal = price * quantity;
+          const discountedItemTotal = discountedPrice * quantity;
+
+          order.items[itemIndex].quantity = quantity;
+          order.items[itemIndex].total_amount =
+            mongoose.Types.Decimal128.fromString(itemTotal.toString());
+          order.items[itemIndex].discounted_total_amount =
+            mongoose.Types.Decimal128.fromString(
+              discountedItemTotal.toString()
+            );
+        }
+      }
+    }
+
+    // Recalculate totals after item updates
+    if (updateData.products || updateData.bundles) {
+      let totalAmount = 0;
+      let discountedTotalAmount = 0;
+
+      order.items.forEach((item) => {
+        totalAmount += parseFloat(item.total_amount.toString());
+        discountedTotalAmount += parseFloat(
+          item.discounted_total_amount.toString()
+        );
+      });
+
+      order.totalAmount = mongoose.Types.Decimal128.fromString(
+        totalAmount.toString()
+      );
+      order.discountedTotalAmount = mongoose.Types.Decimal128.fromString(
+        discountedTotalAmount.toString()
+      );
+    }
+
+    // Update other fields if provided
+    if (updateData.notes) {
+      order.notes = updateData.notes;
+    }
+
+    await order.save();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, order, "Order updated successfully", true));
+  } catch (error) {
+    console.error("Error updating order:", error);
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Error updating order", false));
   }
 });
 
