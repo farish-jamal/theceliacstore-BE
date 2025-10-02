@@ -91,7 +91,7 @@ const ProductSchema = new mongoose.Schema(
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Brand",
-      required: true,
+      required: false,
     },
     is_best_seller: {
       type: Boolean,

@@ -369,10 +369,13 @@ const bulkCreateProducts = async (products, adminId) => {
 
   for (const [index, productData] of products.entries()) {
     try {
-      // // Skip template/header rows
-      // if (isTemplateRow(productData)) {
-      //   continue;
-      // }
+      console.log(`Processing product ${index}: ${productData.name}`);
+
+      // Check if this is a template row (even though filtering is commented out)
+      if (isTemplateRow(productData)) {
+        console.log(`Skipping template row ${index}: ${productData.name}`);
+        continue;
+      }
 
       if (!productData.name || !productData.price || !productData.sub_category) {
         throw new Error("Missing required fields (name, price, or sub_category)");
@@ -471,6 +474,17 @@ const bulkCreateProducts = async (products, adminId) => {
       // Set the found brand ID
       processedProduct.brand = brandId;
 
+      // Set manufacturer field (string) from the original data
+      // processedProduct.manufacturer = productData.manufacturer || productData.brand || '';
+
+      console.log(`Product ${index} processed fields:`, {
+        sku: processedProduct.sku,
+        brand: processedProduct.brand,
+        // manufacturer: processedProduct.manufacturer,
+        sub_category: processedProduct.sub_category,
+        name: processedProduct.name
+      });
+
       // Process tags field
       processedProduct.tags = processTagsField(productData);
 
@@ -498,16 +512,16 @@ const bulkCreateProducts = async (products, adminId) => {
         }
       });
 
-      // Remove SKU-related fields that might have different names
+      // Remove SKU-related fields that might have different names (but keep the processed sku)
       Object.keys(processedProduct).forEach(key => {
-        if (key.toLowerCase() === 'sku' || key.toLowerCase() === 'product_sku') {
+        if ((key.toLowerCase() === 'sku' || key.toLowerCase() === 'product_sku') && key !== 'sku') {
           delete processedProduct[key];
         }
       });
 
-      // Remove brand-related fields that might have different names
+      // Remove brand-related fields that might have different names (but keep the processed brand)
       Object.keys(processedProduct).forEach(key => {
-        if (key.toLowerCase() === 'brand' || key.toLowerCase() === 'manufacturer') {
+        if ((key.toLowerCase() === 'brand' || key.toLowerCase() === 'manufacturer') && key !== 'brand') {
           delete processedProduct[key];
         }
       });
@@ -518,6 +532,11 @@ const bulkCreateProducts = async (products, adminId) => {
           delete processedProduct[key];
         }
       });
+
+      // Remove category field as it's not in Product schema
+      if (processedProduct.category) {
+        delete processedProduct.category;
+      }
 
       // Remove the original sub_category field since we've processed it
       if (processedProduct.sub_category && processedProduct.sub_category !== subCategoryId) {
@@ -537,11 +556,16 @@ const bulkCreateProducts = async (products, adminId) => {
         throw new Error("Discounted price cannot be higher than regular price");
       }
 
-      validProducts.push({
+      // Store original index separately for tracking
+      const productWithIndex = {
         ...processedProduct,
         created_by_admin: adminId,
         originalIndex: index, // Store original index for success tracking
-      });
+      };
+      
+      validProducts.push(productWithIndex);
+
+      console.log(`Product ${index} (${productData.name}) added to validProducts array`);
     } catch (error) {
       results.failed.push({
         index,
@@ -551,11 +575,24 @@ const bulkCreateProducts = async (products, adminId) => {
     }
   }
 
+  console.log(`Total valid products to insert: ${validProducts.length}`);
+  
   if (validProducts.length > 0) {
     try {
+      console.log('Starting bulk insert...');
+      console.log('Sample product data:', JSON.stringify(validProducts[0], null, 2));
+      
+      // Remove originalIndex field before insertion to avoid validation errors
+      const productsForInsert = validProducts.map(({ originalIndex, ...product }) => product);
+      
+      console.log('Products for insert (first one):', JSON.stringify(productsForInsert[0], null, 2));
+      
       const insertedProducts = await ProductsRepository.bulkCreateProducts(
-        validProducts
+        productsForInsert
       );
+      
+      console.log(`Successfully inserted ${insertedProducts.length} products`);
+      console.log('Inserted products:', insertedProducts);
       
       // Map inserted products back to their original indices
       results.success = insertedProducts.map((product, i) => ({
@@ -564,7 +601,13 @@ const bulkCreateProducts = async (products, adminId) => {
         name: product.name,
         sku: product.sku,
       }));
+      
+      console.log('Success array:', results.success);
     } catch (error) {
+      console.error('Bulk insert error:', error);
+      console.error('Error details:', error.message);
+      console.error('Stack trace:', error.stack);
+      
       // If bulk insert fails, add all valid products to failed list
       validProducts.forEach(validProduct => {
         results.failed.push({

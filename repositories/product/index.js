@@ -203,7 +203,7 @@ const bulkCreateProducts = async (productsData) => {
     }
 
     const createdProducts = await Product.insertMany(productsData, {
-      ordered: false,
+      ordered: true, // Change to true to get proper error messages
     });
 
     return createdProducts;
