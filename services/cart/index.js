@@ -61,10 +61,8 @@ const updateCart = async ({
     };
     if (variant_sku) item.variant_sku = variant_sku;
   } else if (type === "bundle") {
-    console.log(" >>>>>>>>>>>>>>", bundle_id);
     itemData = await BundleRepository.getBundleById(bundle_id);
 
-    console.log("111111 >>>>>>>>>>>>>>>>", itemData);
     if (!itemData) {
       throw new Error("Bundle not found");
     }
@@ -80,16 +78,6 @@ const updateCart = async ({
         ? itemData.discounted_price
         : itemData.price;
 
-    // Debug: Log the price values
-    console.log("Bundle price debug:", {
-      bundleId: itemData._id,
-      bundleName: itemData.name,
-      originalPrice: itemData.price,
-      discountedPrice: itemData.discounted_price,
-      selectedPrice: itemPrice,
-      priceType: typeof itemPrice,
-    });
-
     // Ensure itemPrice is a valid number
     if (isNaN(itemPrice) || itemPrice <= 0) {
       throw new Error("Invalid bundle price");
@@ -104,8 +92,6 @@ const updateCart = async ({
       addedAt: new Date(),
       updatedAt: new Date(),
     };
-
-    console.log("Created cart item:", item);
   } else {
     throw new Error("Invalid type. Must be 'product' or 'bundle'");
   }
@@ -173,19 +159,10 @@ const updateCart = async ({
       cart.items[existingItemIndex].price = item.price; // Preserve the correct price
       cart.items[existingItemIndex].total = item.price * quantity;
       cart.items[existingItemIndex].updatedAt = new Date();
-
-      console.log("Updated existing item:", {
-        type: cart.items[existingItemIndex].type,
-        quantity: cart.items[existingItemIndex].quantity,
-        price: cart.items[existingItemIndex].price,
-        total: cart.items[existingItemIndex].total,
-      });
     } else {
       cart.items.splice(existingItemIndex, 1);
     }
   } else if (quantity > 0) {
-    console.log("Before pushing item to cart:", JSON.stringify(item, null, 2));
-
     // Create a new cart item object to ensure proper schema handling
     const newCartItem = {
       type: item.type,
@@ -207,10 +184,6 @@ const updateCart = async ({
     }
 
     cart.items.push(newCartItem);
-    console.log(
-      "After pushing item to cart:",
-      JSON.stringify(cart.items[cart.items.length - 1], null, 2)
-    );
   }
 
   // If no items left, delete the cart
@@ -226,8 +199,6 @@ const updateCart = async ({
     "items.product",
     "items.bundle",
   ]);
-
-  console.log("Final cart after save:", JSON.stringify(cart, null, 2));
 
   return cart;
 };

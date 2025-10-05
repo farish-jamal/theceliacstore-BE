@@ -94,6 +94,14 @@ const ProductSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    is_imported_picks: {
+      type: Boolean,
+      default: false,
+    },
+    is_bakery: {
+      type: Boolean,
+      default: false,
+    },
     sub_category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SubCategory",

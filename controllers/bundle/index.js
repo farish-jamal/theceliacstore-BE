@@ -126,9 +126,7 @@ const createBundle = asyncHandler(async (req, res) => {
       typeof p === "string" ? JSON.parse(p) : p
     );
 
-    console.log("bundleData", bundleData)
     for (const entry of bundleData.products) {
-      console.log(">>>>>",entry.product)
       const productDoc = await Product.findById(entry.product).lean();
       if (!productDoc) {
         return res.json(new ApiResponse(400, null, `Product not found: ${entry.product}`, false));
@@ -230,8 +228,6 @@ const exportBundles = asyncHandler(async (req, res) => {
       filter.createdAt = { $lte: endDate };
     }
 
-    console.log("Export filter:", filter);
-
     // Use aggregation to populate product details and category/sub-category names
     const bundles = await Bundle.aggregate([
       { $match: filter },
@@ -293,8 +289,6 @@ const exportBundles = asyncHandler(async (req, res) => {
         }
       }
     ]);
-
-    console.log("Bundles found:", bundles.length);
 
     // Flatten bundles for export - each bundle becomes multiple rows (one per product)
     const serializedBundles = bundles.flatMap((bundle) => {
@@ -383,8 +377,6 @@ const exportBundles = asyncHandler(async (req, res) => {
       }
     });
 
-    console.log("Serialized bundles:", serializedBundles.length);
-
     let buffer;
     let mimeType = "";
     const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -408,8 +400,6 @@ const exportBundles = asyncHandler(async (req, res) => {
     await fs.writeFile(tempFilePath, buffer);
 
     const url = await uploadPDF(tempFilePath, "exports");
-
-    console.log("Export completed successfully");
 
     return res.json(
       new ApiResponse(

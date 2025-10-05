@@ -10,18 +10,30 @@ const getAllProducts = async ({
   category,
   sub_category,
   is_best_seller,
+  is_imported_picks,
+  is_bakery,
   search,
   price_range,
   sort_by,
   rating,
   brands
 }) => {
+  console.log("category", category);
+  console.log("sub_category", sub_category);
+  console.log("brands", brands);
+  console.log("is_best_seller", is_best_seller);
+  console.log("is_imported_picks", is_imported_picks);
+  console.log("is_bakery", is_bakery);
+  console.log("search", search);
+  console.log("price_range", price_range);
   return await ProductsRepository.getAllProducts({
     page,
     per_page,
     category,
     sub_category,
     is_best_seller,
+    is_imported_picks,
+    is_bakery,
     search,
     price_range,
     sort_by,
@@ -255,6 +267,34 @@ const processTagsField = (productData) => {
   }
 
   return [];
+};
+
+// Helper function to process boolean fields
+const processBooleanField = (productData, fieldName) => {
+  const fieldValue = productData[fieldName];
+  
+  if (fieldValue === undefined || fieldValue === null || fieldValue === "") {
+    return false; // default value
+  }
+
+  // Handle numeric values first (1 = true, 0 = false)
+  if (typeof fieldValue === 'number' || !isNaN(Number(fieldValue))) {
+    const numericValue = Number(fieldValue);
+    return numericValue === 1;
+  }
+
+  // Handle string values
+  if (typeof fieldValue === 'string') {
+    const stringValue = fieldValue.toLowerCase().trim();
+    return stringValue === 'true' || stringValue === '1' || stringValue === 'yes';
+  }
+
+  // Handle boolean values
+  if (typeof fieldValue === 'boolean') {
+    return fieldValue;
+  }
+
+  return false; // default to false if unrecognized
 };
 
 // Helper function to detect template/header rows
@@ -547,6 +587,11 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
       if (tagsValue && tagsValue.length > 0) {
         processedProduct.tags = tagsValue;
       }
+
+      // Process boolean fields
+      processedProduct.is_best_seller = processBooleanField(productData, 'is_best_seller');
+      processedProduct.is_imported_picks = processBooleanField(productData, 'is_imported_picks');
+      processedProduct.is_bakery = processBooleanField(productData, 'is_bakery');
 
       // Clean up redundant fields
       Object.keys(processedProduct).forEach(key => {

@@ -26,7 +26,6 @@ const getAllBundles = async ({
   if (is_best_seller !== undefined && is_best_seller !== null) {
     const bestSellerValue = is_best_seller === 'true' || is_best_seller === true;
     match.is_best_seller = bestSellerValue;
-    console.log("Bundle is_best_seller filter applied:", bestSellerValue);
   }
 
   // Handle price range filter
@@ -178,9 +177,6 @@ const getAllBundles = async ({
   pipeline.push({ $sort: sortOptions });
   pipeline.push({ $skip: skip });
   pipeline.push({ $limit: per_page });
-
-  console.log("Bundle match filter:", match);
-  console.log("Bundle pipeline stages:", pipeline.length);
 
   // Execute the pipeline
   const bundles = await Bundle.aggregate(pipeline);

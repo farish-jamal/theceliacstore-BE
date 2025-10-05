@@ -20,9 +20,7 @@ const getCartByUserId = async ({ user_id }) => {
 };
 
 const addToCart = async (data) => {
-  console.log("CartRepository.addToCart - data:", JSON.stringify(data, null, 2));
   const result = await Cart.create(data);
-  console.log("CartRepository.addToCart - result:", JSON.stringify(result, null, 2));
   return result;
 };
 

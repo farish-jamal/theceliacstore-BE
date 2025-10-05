@@ -1,5 +1,6 @@
 const Product = require("../../models/productsModel");
 const SubCategory = require("../../models/subCategoryModel");
+const { convertToObjectIds } = require("../../utils/objectIdHelper");
 
 const getAllProducts = async ({
   page,
@@ -7,6 +8,8 @@ const getAllProducts = async ({
   category,
   sub_category,
   is_best_seller,
+  is_imported_picks,
+  is_bakery,
   search,
   rating,
   price_range,
@@ -18,7 +21,10 @@ const getAllProducts = async ({
 
   let subCategoryIds = [];
   if (category) {
-    const categoryArray = Array.isArray(category) ? category : [category];
+    // Convert category IDs to ObjectIds
+    const objectIdCategories = convertToObjectIds(category);
+    const categoryArray = Array.isArray(objectIdCategories) ? objectIdCategories : [objectIdCategories];
+    
     const subCats = await SubCategory.find({ category: { $in: categoryArray } }, "_id");
     subCategoryIds = subCats.map((sc) => sc._id);
     if (sub_category) {
@@ -35,24 +41,42 @@ const getAllProducts = async ({
       return { data: [], total: 0 };
     }
   } else if (sub_category) {
-    match.sub_category = Array.isArray(sub_category)
-      ? { $in: sub_category }
-      : sub_category;
+    console.log("Filtering by sub_category only:", sub_category);
+    
+    // Convert string IDs to ObjectIds for proper matching
+    const objectIdSubCategories = convertToObjectIds(sub_category);
+    
+    match.sub_category = Array.isArray(objectIdSubCategories)
+      ? { $in: objectIdSubCategories }
+      : objectIdSubCategories;
+    console.log("Match object for sub_category:", match.sub_category);
   }
 
   if (is_best_seller !== undefined && is_best_seller !== null) {
     const bestSellerValue = is_best_seller === 'true' || is_best_seller === true;
     match.is_best_seller = bestSellerValue;
-    console.log("is_best_seller filter applied:", bestSellerValue);
   }
+  
+  if (is_imported_picks !== undefined && is_imported_picks !== null) {
+    const importedPicksValue = is_imported_picks === 'true' || is_imported_picks === true;
+    match.is_imported_picks = importedPicksValue;
+  }
+  
+  if (is_bakery !== undefined && is_bakery !== null) {
+    const bakeryValue = is_bakery === 'true' || is_bakery === true;
+    match.is_bakery = bakeryValue;
+  }
+
   if (search) {
     match.name = { $regex: search, $options: "i" };
   }
 
   if (brands) {
-    match.brand = { $in: Array.isArray(brands) ? brands : [brands] };
-    console.log("Brand filter applied:", match.brand);
+    // Convert brand IDs to ObjectIds
+    const objectIdBrands = convertToObjectIds(brands);
+    match.brand = { $in: Array.isArray(objectIdBrands) ? objectIdBrands : [objectIdBrands] };
   }
+
   if (price_range) {
     const priceRanges = Array.isArray(price_range)
       ? price_range
@@ -122,7 +146,6 @@ const getAllProducts = async ({
   pipeline.push({ $limit: per_page });
 
   const products = await Product.aggregate(pipeline);
-  console.log(products,"<<<<<<<<<<<<<<<<,")
 
   const countPipeline = pipeline.filter(
     (stage) =>

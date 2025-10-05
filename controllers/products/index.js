@@ -18,21 +18,47 @@ const getAllProducts = asyncHandler(async (req, res) => {
     rating,
     sub_category,
     is_best_seller,
+    is_imported_picks,
+    is_bakery,
     search,
     brands,
     sort_by = "created_at",
   } = req.query;
 
+  // Handle comma-separated values for array parameters
+  const processArrayParam = (param) => {
+    if (!param) return undefined;
+    
+    // If it's already an array, return as is
+    if (Array.isArray(param)) {
+      return param;
+    }
+    
+    // If it's a string with commas, split it
+    if (typeof param === 'string' && param.includes(',')) {
+      return param.split(',').map(item => item.trim()).filter(item => item);
+    }
+    
+    // Single value, wrap in array
+    return [param];
+  };
+
+  const processedCategory = processArrayParam(category);
+  const processedSubCategory = processArrayParam(sub_category);
+  const processedBrands = processArrayParam(brands);
+
   const products = await ProductsServices.getAllProducts({
     page: parseInt(page, 10),
     per_page: parseInt(per_page, 10),
-    category,
-    sub_category,
+    category: processedCategory,
+    sub_category: processedSubCategory,
     is_best_seller,
+    is_imported_picks,
+    is_bakery,
     search,
     rating,
     price_range,
-    brands,
+    brands: processedBrands,
     sort_by,
   });
 
@@ -473,14 +499,6 @@ const exportProducts = asyncHandler(async (req, res) => {
     },
   ]);
 
-  // Debug: Log first product to see the structure
-  if (products.length > 0) {
-    console.log(
-      "First product structure:",
-      JSON.stringify(products[0], null, 2)
-    );
-  }
-
   // Flatten variants for export
   const serializedProducts = products.flatMap((p) => {
     const { __v, _id, createdAt, updatedAt, variants, sub_category, ...rest } =
@@ -603,6 +621,8 @@ const generateSampleFile = asyncHandler(async (req, res) => {
       inventory: "Inventory (Optional) - Number",
       tags: "Tags (Optional) - Comma separated",
       is_best_seller: "Is Best Seller (Optional) - 'true' or 'false'",
+      is_imported_picks: "Is Imported Picks (Optional) - 'true' or 'false'",
+      is_bakery: "Is Bakery (Optional) - 'true' or 'false'",
       sub_category: `Sub Category (Required) - Select from: ${subCategoryOptions}`,
       category: `Category (Optional) - Select from: ${categoryOptions}`,
       manufacturer: "Manufacturer (Optional)",
@@ -656,6 +676,16 @@ const generateSampleFile = asyncHandler(async (req, res) => {
       },
       {
         field: "is_best_seller",
+        description: "Must be 'true' or 'false' (string)",
+        example: "true or false",
+      },
+      {
+        field: "is_imported_picks",
+        description: "Must be 'true' or 'false' (string)",
+        example: "true or false",
+      },
+      {
+        field: "is_bakery",
         description: "Must be 'true' or 'false' (string)",
         example: "true or false",
       },
@@ -717,6 +747,8 @@ const generateSampleFile = asyncHandler(async (req, res) => {
           inventory: "Inventory (Optional) - Number",
           tags: "Tags (Optional) - Comma separated",
           is_best_seller: "Is Best Seller (Optional) - 'true' or 'false'",
+          is_imported_picks: "Is Imported Picks (Optional) - 'true' or 'false'",
+          is_bakery: "Is Bakery (Optional) - 'true' or 'false'",
           sub_category: `Sub Category (Required) - Select from: ${subCategoryIds.join(
             " | "
           )}`,
@@ -745,6 +777,8 @@ const generateSampleFile = asyncHandler(async (req, res) => {
           inventory: "",
           tags: "",
           is_best_seller: "",
+          is_imported_picks: "",
+          is_bakery: "",
           sub_category: "",
           category: "",
           manufacturer: "",
