@@ -12,6 +12,7 @@ router.get("/", ProductController.getAllProducts);
 router.get("/export", adminOrSuperAdmin, ProductController.exportProducts);
 router.get("/sample", adminOrSuperAdmin, ProductController.generateSampleFile);
 router.get("/admin", adminOrSuperAdmin, ProductController.getProductsByAdmin);
+router.get("/recommendations", ProductController.getProductRecommendations);
 router.get("/:id", ProductController.getProductById);
 router.put("/:id", adminOrSuperAdmin, upload.any(), ProductController.updateProduct);
 router.delete("/:id", adminOrSuperAdmin, ProductController.deleteProduct);

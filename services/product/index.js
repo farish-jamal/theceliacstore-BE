@@ -399,6 +399,145 @@ const generateSku = async (productName, brandName = '', subCategoryName = '') =>
   return sku;
 };
 
+const getProductRecommendations = async (productId, options = {}) => {
+  const { page = 1, per_page = 10 } = options;
+  const skip = (page - 1) * per_page;
+  
+  try {
+    // Get the target product
+    const targetProduct = await Product.findById(productId)
+      .populate('brand')
+      .populate('sub_category');
+    
+    if (!targetProduct) {
+      return { data: [], total: 0, page, per_page, total_pages: 0 };
+    }
+
+    // Get all published products except the target product
+    const allProducts = await Product.find({
+      _id: { $ne: productId },
+      status: 'published'
+    })
+    .populate('brand')
+    .populate('sub_category');
+
+    // Calculate recommendation scores for each product
+    const scoredProducts = allProducts.map(product => {
+      let score = 0;
+      
+      // Base score for subcategory match (highest priority)
+      if (product.sub_category && targetProduct.sub_category && 
+          product.sub_category._id.toString() === targetProduct.sub_category._id.toString()) {
+        score += 100;
+      }
+      
+      // Base score for brand match (second highest priority)
+      if (product.brand && targetProduct.brand && 
+          product.brand._id.toString() === targetProduct.brand._id.toString()) {
+        score += 80;
+      }
+      
+      // Major impact: Best seller bonus
+      if (product.is_best_seller) {
+        score += 60;
+      }
+      
+      // Price range similarity (±20%)
+      const targetPrice = parseFloat(targetProduct.price.toString());
+      const productPrice = parseFloat(product.price.toString());
+      const priceDiff = Math.abs(targetPrice - productPrice) / targetPrice;
+      if (priceDiff <= 0.2) {
+        score += 40;
+      } else if (priceDiff <= 0.5) {
+        score += 20;
+      }
+      
+      // Imported picks bonus
+      if (product.is_imported_picks) {
+        score += 30;
+      }
+      
+      // Bakery bonus
+      if (product.is_bakery) {
+        score += 25;
+      }
+      
+      // Recent products bonus (newer products get slight boost)
+      const daysSinceCreated = (Date.now() - product.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceCreated <= 30) {
+        score += 15;
+      } else if (daysSinceCreated <= 90) {
+        score += 10;
+      }
+      
+      // Discount bonus (products with discounts get slight boost)
+      if (product.discounted_price && product.discounted_price > 0) {
+        score += 20;
+      }
+      
+      return {
+        product,
+        score
+      };
+    });
+
+    // Sort by score (highest first), then by creation date (newest first)
+    const sortedProducts = scoredProducts
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return new Date(b.product.createdAt) - new Date(a.product.createdAt);
+      })
+      .map(item => item.product);
+
+    // Apply pagination
+    const total = sortedProducts.length;
+    const paginatedProducts = sortedProducts.slice(skip, skip + per_page);
+    const total_pages = Math.ceil(total / per_page);
+
+    // Convert Decimal128 to numbers for all recommendations
+    const convertedProducts = paginatedProducts.map(product => {
+      const convertedProduct = {
+        ...product.toObject(),
+        price: product.price && typeof product.price === 'object' && product.price.$numberDecimal 
+          ? parseFloat(product.price.$numberDecimal) 
+          : (product.price && typeof product.price === 'object' ? parseFloat(product.price.toString()) : product.price),
+        discounted_price: product.discounted_price && typeof product.discounted_price === 'object' && product.discounted_price.$numberDecimal
+          ? parseFloat(product.discounted_price.$numberDecimal)
+          : (product.discounted_price && typeof product.discounted_price === 'object' ? parseFloat(product.discounted_price.toString()) : product.discounted_price),
+      };
+
+      // Handle variants
+      if (Array.isArray(convertedProduct.variants)) {
+        convertedProduct.variants = convertedProduct.variants.map(variant => ({
+          ...variant,
+          price: variant.price && typeof variant.price === 'object' && variant.price.$numberDecimal
+            ? parseFloat(variant.price.$numberDecimal)
+            : (variant.price && typeof variant.price === 'object' ? parseFloat(variant.price.toString()) : variant.price),
+          discounted_price: variant.discounted_price && typeof variant.discounted_price === 'object' && variant.discounted_price.$numberDecimal
+            ? parseFloat(variant.discounted_price.$numberDecimal)
+            : (variant.discounted_price && typeof variant.discounted_price === 'object' ? parseFloat(variant.discounted_price.toString()) : variant.discounted_price),
+        }));
+      }
+
+      return convertedProduct;
+    });
+
+    return {
+      data: convertedProducts,
+      total,
+      page,
+      per_page,
+      total_pages
+    };
+
+  } catch (error) {
+    console.error('Error getting product recommendations:', error);
+    return { data: [], total: 0, page, per_page, total_pages: 0 };
+  }
+};
+
 const bulkCreateProducts = async (products, adminId) => {
   const results = { success: [], failed: [] };
   const BATCH_SIZE = 100; // Process in batches of 100
@@ -696,6 +835,7 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductRecommendations,
   getProductsByAdmin,
   bulkCreateProducts,
 };

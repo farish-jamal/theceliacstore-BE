@@ -1,15 +1,13 @@
 const jwt = require("jsonwebtoken");
 
-// Generate access token (short-lived)
+// Generate access token (no expiry)
 const generateAccessToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "1d" });
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET);
 };
 
-// Generate refresh token (long-lived)
+// Generate refresh token (no expiry)
 const generateRefreshToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: "7d",
-  });
+  return jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET);
 };
 
 const sendRefreshToken = (res, token) => {
@@ -18,7 +16,7 @@ const sendRefreshToken = (res, token) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     path: "/api/auth/refresh",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    // No maxAge - cookie won't expire
   });
 };
 

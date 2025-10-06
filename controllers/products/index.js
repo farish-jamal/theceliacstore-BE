@@ -383,6 +383,25 @@ const deleteProduct = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, null, "Product deleted successfully", true));
 });
 
+const getProductRecommendations = asyncHandler(async (req, res) => {
+  const { product_id, page = 1, per_page = 10 } = req.query;
+
+  if (!product_id) {
+    return res.json(new ApiResponse(400, null, "Product ID is required", false));
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(product_id)) {
+    return res.json(new ApiResponse(400, null, "Invalid product ID", false));
+  }
+
+  const recommendations = await ProductsServices.getProductRecommendations(product_id, {
+    page: parseInt(page, 10),
+    per_page: parseInt(per_page, 10)
+  });
+
+  res.json(new ApiResponse(200, recommendations, "Product recommendations fetched successfully", true));
+});
+
 const getProductsByAdmin = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
   if (!adminId) {
@@ -876,6 +895,7 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductRecommendations,
   getProductsByAdmin,
   bulkCreateProducts,
   exportProducts,
