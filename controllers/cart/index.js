@@ -1,14 +1,87 @@
 const { asyncHandler } = require("../../common/asyncHandler.js");
 const ApiResponse = require("../../utils/ApiResponse.js");
 const CartService = require("../../services/cart/index.js");
-const mongoose = require("mongoose");
+const DeliveryZoneService = require("../../services/delivery-zone/index.js");
+const Address = require("../../models/addressModel.js");
 
 const getCart = asyncHandler(async (req, res) => {
   const user_id = req.user?._id;
+  const { addressId: address_id } = req.query;
 
   const cart = await CartService.getCart({ user_id });
+
+  let shippingCharge = 0;
+
+  // Calculate shipping charge if user is logged in and cart exists
+  if (user_id && cart && cart.items && cart.items.length > 0) {
+    let selectedAddress = null;
+
+    // If address_id is provided, use that address
+    if (address_id) {
+      selectedAddress = await Address.findOne({
+        _id: address_id,
+        user: user_id,
+      });
+    } else {
+      // Otherwise, use primary address
+      selectedAddress = await Address.findOne({
+        user: user_id,
+        isPrimary: true,
+      });
+    }
+
+    if (selectedAddress && selectedAddress.pincode) {
+      // Calculate total weight of all items in cart
+      let totalWeight = 0;
+
+      for (const item of cart.items) {
+        let itemWeight = 0;
+
+        if (item.type === "product" && item.product) {
+          // Get weight from product
+          itemWeight = item.product.weight_in_grams || 0;
+        } else if (item.type === "bundle" && item.bundle) {
+          // For bundles, calculate total weight from products in the bundle
+          if (item.bundle.products && Array.isArray(item.bundle.products)) {
+            itemWeight = item.bundle.products.reduce((sum, bundleProduct) => {
+              const productWeight = bundleProduct.product?.weight_in_grams || 0;
+              const productQty = bundleProduct.quantity || 1;
+              return sum + productWeight * productQty;
+            }, 0);
+          }
+        }
+
+        // Multiply by quantity
+        totalWeight += itemWeight * (item.quantity || 1);
+      }
+
+      // Calculate shipping charge if total weight is available
+      if (totalWeight > 0) {
+        const deliveryPriceResult =
+          await DeliveryZoneService.calculateDeliveryPrice(
+            selectedAddress.pincode,
+            totalWeight
+          );
+
+        if (deliveryPriceResult.success) {
+          shippingCharge = deliveryPriceResult.delivery_price || 0;
+        }
+      }
+    }
+  }
+
+  const cartTotalPrice = cart?.total_price || 0;
+  const finalPrice = cartTotalPrice + shippingCharge;
+
+  // Add shipping and final price to cart object
+  const cartWithPricing = {
+    ...(cart.toObject() || {}),
+    shipping_charge: shippingCharge,
+    final_price: finalPrice,
+  };
+
   const data = {
-    data: cart || [],
+    data: cartWithPricing,
     total: !user_id ? (cart ? cart.length : 0) : cart ? 1 : 0,
   };
 

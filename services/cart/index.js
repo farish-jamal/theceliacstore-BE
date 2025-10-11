@@ -121,10 +121,15 @@ const updateCart = async ({
       is_active: true,
     });
     // Fetch the created cart with populated fields
-    cart = await Cart.findOne({ user: user_id }).populate([
-      "items.product",
-      "items.bundle",
-    ]);
+    cart = await Cart.findOne({ user: user_id })
+      .populate("items.product")
+      .populate({
+        path: "items.bundle",
+        populate: {
+          path: "products.product",
+          model: "Product"
+        }
+      });
     return cart;
   }
 
@@ -195,10 +200,15 @@ const updateCart = async ({
   // The pre-save hook will handle total_price and is_active calculations
   await cart.save();
 
-  cart = await Cart.findOne({ user: user_id }).populate([
-    "items.product",
-    "items.bundle",
-  ]);
+  cart = await Cart.findOne({ user: user_id })
+    .populate("items.product")
+    .populate({
+      path: "items.bundle",
+      populate: {
+        path: "products.product",
+        model: "Product"
+      }
+    });
 
   return cart;
 };
