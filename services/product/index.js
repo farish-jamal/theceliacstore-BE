@@ -3,6 +3,7 @@ const SubCategory = require("../../models/subCategoryModel.js");
 const Brand = require("../../models/brandModel.js");
 const ProductsRepository = require("../../repositories/product/index.js");
 const Product = require("../../models/productsModel.js");
+const Order = require("../../models/orderModel.js");
 
 const getAllProducts = async ({
   page,
@@ -829,6 +830,21 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
   return results;
 };
 
+const checkProductPurchased = async (productId, userId) => {
+  try {
+    // Check if user has ordered this product
+    const order = await Order.findOne({
+      user: userId,
+      "items.product._id": productId,
+    });
+
+    return !!order; // Returns true if order exists, false otherwise
+  } catch (error) {
+    console.error('Error checking product purchase:', error);
+    return false;
+  }
+};
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -836,6 +852,7 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getProductRecommendations,
+  checkProductPurchased,
   getProductsByAdmin,
   bulkCreateProducts,
 };

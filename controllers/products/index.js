@@ -402,6 +402,30 @@ const getProductRecommendations = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, recommendations, "Product recommendations fetched successfully", true));
 });
 
+const checkProductPurchased = asyncHandler(async (req, res) => {
+  const { product_id } = req.query;
+  const userId = req.user?._id;
+
+  if (!product_id) {
+    return res.json(new ApiResponse(400, null, "Product ID is required", false));
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(product_id)) {
+    return res.json(new ApiResponse(400, null, "Invalid product ID", false));
+  }
+
+  if (!userId) {
+    return res.json(new ApiResponse(401, null, "User not authenticated", false));
+  }
+
+  const isPurchased = await ProductsServices.checkProductPurchased(product_id, userId);
+
+  res.json(new ApiResponse(200, { 
+    is_purchased: isPurchased,
+    product_id: product_id 
+  }, isPurchased ? "Product has been purchased" : "Product not purchased", true));
+});
+
 const getProductsByAdmin = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
   if (!adminId) {
@@ -896,6 +920,7 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getProductRecommendations,
+  checkProductPurchased,
   getProductsByAdmin,
   bulkCreateProducts,
   exportProducts,

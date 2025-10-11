@@ -22,6 +22,7 @@ const contactUsRoutes = require("./routes/contact_us/index.js");
 const orderRoutes = require("./routes/order/index.js");
 const bundleRoutes = require("./routes/bundle/index.js");
 const dashboardRoutes = require("./routes/dashboard/index.js");
+const deliveryZoneRoutes = require("./routes/delivery-zone/index.js");
 
 // Connect DB
 connectDB();
@@ -51,6 +52,7 @@ app.use("/api/contact-us", contactUsRoutes);
 app.use("/api/order", orderRoutes);
 app.use("/api/bundles", bundleRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/delivery-zone", deliveryZoneRoutes);
 
 app.use("/api-doc", swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
