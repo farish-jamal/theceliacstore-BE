@@ -60,10 +60,6 @@ const createDeliveryZone = asyncHandler(async (req, res) => {
     return res.json(new ApiResponse(400, null, "Zone name is required", false));
   }
 
-  if (!zoneData.pincodes || zoneData.pincodes.length === 0) {
-    return res.json(new ApiResponse(400, null, "At least one pincode is required", false));
-  }
-
   if (!zoneData.pricing_type) {
     return res.json(new ApiResponse(400, null, "Pricing type is required", false));
   }

@@ -10,13 +10,7 @@ const DeliveryZoneSchema = new mongoose.Schema(
     },
     pincodes: {
       type: [String],
-      required: true,
-      validate: {
-        validator: function(pincodes) {
-          return pincodes && pincodes.length > 0;
-        },
-        message: "At least one pincode is required",
-      },
+      default: [],
     },
     pricing_type: {
       type: String,
