@@ -82,6 +82,29 @@ const createDeliveryZone = asyncHandler(async (req, res) => {
     }
   }
 
+  if (zoneData.pricing_type === "flat_rate_plus_dynamic") {
+    if (!zoneData.weight_unit_grams || zoneData.weight_unit_grams <= 0) {
+      return res.json(
+        new ApiResponse(400, null, "Valid weight unit in grams is required for flat_rate_plus_dynamic pricing", false)
+      );
+    }
+    if (zoneData.price == null || zoneData.price < 0) {
+      return res.json(
+        new ApiResponse(400, null, "Valid price per unit is required for flat_rate_plus_dynamic pricing", false)
+      );
+    }
+    if (zoneData.flat_rate_base == null || zoneData.flat_rate_base < 0) {
+      return res.json(
+        new ApiResponse(400, null, "Valid flat rate base is required for flat_rate_plus_dynamic pricing", false)
+      );
+    }
+    if (!zoneData.min_weight_grams || zoneData.min_weight_grams <= 0) {
+      return res.json(
+        new ApiResponse(400, null, "Valid minimum weight in grams is required for flat_rate_plus_dynamic pricing", false)
+      );
+    }
+  }
+
   if (zoneData.pricing_type === "fixed_rate" && (zoneData.fixed_amount == null || zoneData.fixed_amount < 0)) {
     return res.json(
       new ApiResponse(400, null, "Fixed amount is required for fixed_rate pricing", false)

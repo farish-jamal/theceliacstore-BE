@@ -20,7 +20,7 @@ const DeliveryZoneSchema = new mongoose.Schema(
     },
     pricing_type: {
       type: String,
-      enum: ["free", "flat_rate", "fixed_rate"],
+      enum: ["free", "flat_rate", "fixed_rate", "flat_rate_plus_dynamic"],
       required: true,
     },
     // For flat_rate: pricing based on weight unit and multiplier
@@ -28,24 +28,50 @@ const DeliveryZoneSchema = new mongoose.Schema(
       type: Number,
       validate: {
         validator: function(weight) {
-          if (this.pricing_type === "flat_rate") {
+          if (this.pricing_type === "flat_rate" || this.pricing_type === "flat_rate_plus_dynamic") {
             return weight != null && weight > 0;
           }
           return true;
         },
-        message: "Weight unit in grams is required for flat_rate pricing type",
+        message: "Weight unit in grams is required for flat_rate and flat_rate_plus_dynamic pricing types",
       },
     },
     price: {
       type: Number,
       validate: {
         validator: function(price) {
-          if (this.pricing_type === "flat_rate") {
+          if (this.pricing_type === "flat_rate" || this.pricing_type === "flat_rate_plus_dynamic") {
             return price != null && price >= 0;
           }
           return true;
         },
-        message: "Price is required for flat_rate pricing type",
+        message: "Price is required for flat_rate and flat_rate_plus_dynamic pricing types",
+      },
+    },
+    // For flat_rate_plus_dynamic: base flat rate charge
+    flat_rate_base: {
+      type: Number,
+      validate: {
+        validator: function(base) {
+          if (this.pricing_type === "flat_rate_plus_dynamic") {
+            return base != null && base >= 0;
+          }
+          return true;
+        },
+        message: "Flat rate base is required for flat_rate_plus_dynamic pricing type",
+      },
+    },
+    // For flat_rate_plus_dynamic: minimum weight before dynamic pricing kicks in
+    min_weight_grams: {
+      type: Number,
+      validate: {
+        validator: function(minWeight) {
+          if (this.pricing_type === "flat_rate_plus_dynamic") {
+            return minWeight != null && minWeight > 0;
+          }
+          return true;
+        },
+        message: "Minimum weight in grams is required for flat_rate_plus_dynamic pricing type",
       },
     },
     // For fixed_rate: single fixed amount

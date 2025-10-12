@@ -201,6 +201,44 @@ const calculateDeliveryPrice = async (pincode, weightInGrams) => {
       };
       break;
 
+    case "flat_rate_plus_dynamic":
+      // Validate required fields
+      if (!zone.weight_unit_grams || !zone.price || zone.flat_rate_base == null || !zone.min_weight_grams) {
+        return {
+          success: false,
+          message: "Weight unit, price, flat rate base, and minimum weight are required for this zone",
+        };
+      }
+
+      // Start with flat rate base
+      deliveryPrice = zone.flat_rate_base;
+      
+      // If weight exceeds minimum, add dynamic pricing
+      if (weightInGrams > zone.min_weight_grams) {
+        const excessWeight = weightInGrams - zone.min_weight_grams;
+        const dynamicMultiplier = Math.ceil(excessWeight / zone.weight_unit_grams);
+        const dynamicCharge = zone.price * dynamicMultiplier;
+        deliveryPrice += dynamicCharge;
+        
+        calculationDetails = {
+          flat_rate_base: zone.flat_rate_base,
+          min_weight_grams: zone.min_weight_grams,
+          weight_unit_grams: zone.weight_unit_grams,
+          price_per_unit: zone.price,
+          excess_weight: excessWeight,
+          dynamic_multiplier: dynamicMultiplier,
+          dynamic_charge: dynamicCharge,
+          calculation: `₹${zone.flat_rate_base} base + ${excessWeight}g excess (${dynamicMultiplier} unit(s) of ${zone.weight_unit_grams}g @ ₹${zone.price} per unit) = ₹${zone.flat_rate_base} + ₹${dynamicCharge}`,
+        };
+      } else {
+        calculationDetails = {
+          flat_rate_base: zone.flat_rate_base,
+          min_weight_grams: zone.min_weight_grams,
+          calculation: `${weightInGrams}g is below minimum weight ${zone.min_weight_grams}g, only base charge of ₹${zone.flat_rate_base} applies`,
+        };
+      }
+      break;
+
     default:
       return {
         success: false,
