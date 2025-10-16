@@ -34,7 +34,9 @@ const getAllProducts = async ({
       if (mongoose.Types.ObjectId.isValid(cat)) {
         categoryIds.push(new mongoose.Types.ObjectId(cat));
       } else {
-        categoryNames.push(cat);
+        // Normalize: replace hyphens with spaces for matching
+        const normalizedName = cat.replace(/-/g, ' ');
+        categoryNames.push(normalizedName);
       }
     });
     
@@ -44,7 +46,10 @@ const getAllProducts = async ({
       categoryQuery.push({ _id: { $in: categoryIds } });
     }
     if (categoryNames.length > 0) {
-      categoryQuery.push({ name: { $in: categoryNames } });
+      // Case-insensitive regex match for names (each name gets its own regex)
+      categoryNames.forEach(name => {
+        categoryQuery.push({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+      });
     }
     
     if (categoryQuery.length === 0) {
@@ -73,7 +78,9 @@ const getAllProducts = async ({
         if (mongoose.Types.ObjectId.isValid(subCat)) {
           subCatIds.push(new mongoose.Types.ObjectId(subCat));
         } else {
-          subCatNames.push(subCat);
+          // Normalize: replace hyphens with spaces for matching
+          const normalizedName = subCat.replace(/-/g, ' ');
+          subCatNames.push(normalizedName);
         }
       });
       
@@ -82,7 +89,10 @@ const getAllProducts = async ({
         subCatQuery.push({ _id: { $in: subCatIds } });
       }
       if (subCatNames.length > 0) {
-        subCatQuery.push({ name: { $in: subCatNames } });
+        // Case-insensitive regex match for names (each name gets its own regex)
+        subCatNames.forEach(name => {
+          subCatQuery.push({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+        });
       }
       
       if (subCatQuery.length > 0) {
@@ -110,7 +120,9 @@ const getAllProducts = async ({
       if (mongoose.Types.ObjectId.isValid(subCat)) {
         subCatIds.push(new mongoose.Types.ObjectId(subCat));
       } else {
-        subCatNames.push(subCat);
+        // Normalize: replace hyphens with spaces for matching
+        const normalizedName = subCat.replace(/-/g, ' ');
+        subCatNames.push(normalizedName);
       }
     });
     
@@ -119,7 +131,10 @@ const getAllProducts = async ({
       subCatQuery.push({ _id: { $in: subCatIds } });
     }
     if (subCatNames.length > 0) {
-      subCatQuery.push({ name: { $in: subCatNames } });
+      // Case-insensitive regex match for names (each name gets its own regex)
+      subCatNames.forEach(name => {
+        subCatQuery.push({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+      });
     }
     
     if (subCatQuery.length === 0) {

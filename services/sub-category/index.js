@@ -16,8 +16,14 @@ const getAllSubCategories = async ({
     if (mongoose.Types.ObjectId.isValid(category)) {
       filter.category = new mongoose.Types.ObjectId(category);
     } else {
-      // Try to find category by name
-      const foundCategory = await Category.findOne({ name: category }, "_id");
+      // Normalize the category name: replace hyphens with spaces and use case-insensitive search
+      const normalizedCategory = category.replace(/-/g, ' ');
+      
+      // Try to find category by name (case-insensitive, flexible matching)
+      const foundCategory = await Category.findOne({ 
+        name: { $regex: new RegExp(`^${normalizedCategory}$`, 'i') }
+      }, "_id");
+      
       if (foundCategory) {
         filter.category = foundCategory._id;
       } else {
