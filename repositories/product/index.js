@@ -1,5 +1,8 @@
+const mongoose = require("mongoose");
 const Product = require("../../models/productsModel");
 const SubCategory = require("../../models/subCategoryModel");
+const Category = require("../../models/categoryModel");
+const Brand = require("../../models/brandModel");
 const { convertToObjectIds } = require("../../utils/objectIdHelper");
 
 const getAllProducts = async ({
@@ -21,20 +24,74 @@ const getAllProducts = async ({
 
   let subCategoryIds = [];
   if (category) {
-    // Convert category IDs to ObjectIds
-    const objectIdCategories = convertToObjectIds(category);
-    const categoryArray = Array.isArray(objectIdCategories) ? objectIdCategories : [objectIdCategories];
+    const categoryArray = Array.isArray(category) ? category : [category];
     
-    const subCats = await SubCategory.find({ category: { $in: categoryArray } }, "_id");
-    subCategoryIds = subCats.map((sc) => sc._id);
-    if (sub_category) {
-      const subCatArray = Array.isArray(sub_category)
-        ? sub_category
-        : [sub_category];
-      subCategoryIds = subCategoryIds.filter((id) =>
-        subCatArray.includes(id.toString())
-      );
+    // Find categories by ID or name (slug alternative)
+    const categoryIds = [];
+    const categoryNames = [];
+    
+    categoryArray.forEach(cat => {
+      if (mongoose.Types.ObjectId.isValid(cat)) {
+        categoryIds.push(new mongoose.Types.ObjectId(cat));
+      } else {
+        categoryNames.push(cat);
+      }
+    });
+    
+    // Build query for categories
+    const categoryQuery = [];
+    if (categoryIds.length > 0) {
+      categoryQuery.push({ _id: { $in: categoryIds } });
     }
+    if (categoryNames.length > 0) {
+      categoryQuery.push({ name: { $in: categoryNames } });
+    }
+    
+    if (categoryQuery.length === 0) {
+      return { data: [], total: 0 };
+    }
+    
+    // Find matching categories
+    const foundCategories = await Category.find({ $or: categoryQuery }, "_id");
+    const foundCategoryIds = foundCategories.map(c => c._id);
+    
+    if (foundCategoryIds.length === 0) {
+      return { data: [], total: 0 };
+    }
+    
+    const subCats = await SubCategory.find({ category: { $in: foundCategoryIds } }, "_id");
+    subCategoryIds = subCats.map((sc) => sc._id);
+    
+    if (sub_category) {
+      const subCatArray = Array.isArray(sub_category) ? sub_category : [sub_category];
+      
+      // Find sub-categories by ID or name
+      const subCatIds = [];
+      const subCatNames = [];
+      
+      subCatArray.forEach(subCat => {
+        if (mongoose.Types.ObjectId.isValid(subCat)) {
+          subCatIds.push(new mongoose.Types.ObjectId(subCat));
+        } else {
+          subCatNames.push(subCat);
+        }
+      });
+      
+      const subCatQuery = [];
+      if (subCatIds.length > 0) {
+        subCatQuery.push({ _id: { $in: subCatIds } });
+      }
+      if (subCatNames.length > 0) {
+        subCatQuery.push({ name: { $in: subCatNames } });
+      }
+      
+      if (subCatQuery.length > 0) {
+        const foundSubCats = await SubCategory.find({ $or: subCatQuery }, "_id");
+        const foundSubCatIds = foundSubCats.map(sc => sc._id.toString());
+        subCategoryIds = subCategoryIds.filter((id) => foundSubCatIds.includes(id.toString()));
+      }
+    }
+    
     if (subCategoryIds.length > 0) {
       match.sub_category = { $in: subCategoryIds };
     } else {
@@ -43,12 +100,39 @@ const getAllProducts = async ({
   } else if (sub_category) {
     console.log("Filtering by sub_category only:", sub_category);
     
-    // Convert string IDs to ObjectIds for proper matching
-    const objectIdSubCategories = convertToObjectIds(sub_category);
+    const subCatArray = Array.isArray(sub_category) ? sub_category : [sub_category];
     
-    match.sub_category = Array.isArray(objectIdSubCategories)
-      ? { $in: objectIdSubCategories }
-      : objectIdSubCategories;
+    // Find sub-categories by ID or name
+    const subCatIds = [];
+    const subCatNames = [];
+    
+    subCatArray.forEach(subCat => {
+      if (mongoose.Types.ObjectId.isValid(subCat)) {
+        subCatIds.push(new mongoose.Types.ObjectId(subCat));
+      } else {
+        subCatNames.push(subCat);
+      }
+    });
+    
+    const subCatQuery = [];
+    if (subCatIds.length > 0) {
+      subCatQuery.push({ _id: { $in: subCatIds } });
+    }
+    if (subCatNames.length > 0) {
+      subCatQuery.push({ name: { $in: subCatNames } });
+    }
+    
+    if (subCatQuery.length === 0) {
+      return { data: [], total: 0 };
+    }
+    
+    const foundSubCats = await SubCategory.find({ $or: subCatQuery }, "_id");
+    
+    if (foundSubCats.length === 0) {
+      return { data: [], total: 0 };
+    }
+    
+    match.sub_category = { $in: foundSubCats.map(sc => sc._id) };
     console.log("Match object for sub_category:", match.sub_category);
   }
 
@@ -72,9 +156,34 @@ const getAllProducts = async ({
   }
 
   if (brands) {
-    // Convert brand IDs to ObjectIds
-    const objectIdBrands = convertToObjectIds(brands);
-    match.brand = { $in: Array.isArray(objectIdBrands) ? objectIdBrands : [objectIdBrands] };
+    const brandArray = Array.isArray(brands) ? brands : [brands];
+    
+    // Find brands by ID or slug
+    const brandIds = [];
+    const brandSlugs = [];
+    
+    brandArray.forEach(brand => {
+      if (mongoose.Types.ObjectId.isValid(brand)) {
+        brandIds.push(new mongoose.Types.ObjectId(brand));
+      } else {
+        brandSlugs.push(brand);
+      }
+    });
+    
+    const brandQuery = [];
+    if (brandIds.length > 0) {
+      brandQuery.push({ _id: { $in: brandIds } });
+    }
+    if (brandSlugs.length > 0) {
+      brandQuery.push({ slug: { $in: brandSlugs } });
+    }
+    
+    if (brandQuery.length > 0) {
+      const foundBrands = await Brand.find({ $or: brandQuery }, "_id");
+      if (foundBrands.length > 0) {
+        match.brand = { $in: foundBrands.map(b => b._id) };
+      }
+    }
   }
 
   if (price_range) {
