@@ -342,6 +342,24 @@ const getOrderById = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, order, "Order fetched successfully", true));
 });
 
+const getOrderByIdFormUser = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
+  }
+  const order = await Order.findById(id);
+  if (!order) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, order, "Order fetched successfully", true));
+});
+
 const editOrder = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { id } = req.params;
@@ -1107,4 +1125,5 @@ module.exports = {
   editOrder,
   getProductsWithOrderCounts,
   getOrdersByProductId,
+  getOrderByIdFormUser,
 };

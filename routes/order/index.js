@@ -19,6 +19,7 @@ router.patch("/:id", adminOrSuperAdmin, OrderController.updateOrder);
 router.patch("/:id/status", adminOrSuperAdmin, OrderController.updateOrderStatus);
 router.patch("/edit/:id", user, OrderController.editOrder);
 router.get("/:id", adminOrSuperAdmin, OrderController.getOrderById);
+router.get("/user/:id", user, OrderController.getOrderByIdFormUser);
 // router.get("/generate-order-bill/:id", user, OrderController.generateOrderBill);
 
 module.exports = router;
