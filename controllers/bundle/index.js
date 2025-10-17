@@ -23,6 +23,7 @@ const getAllBundles = asyncHandler(async (req, res) => {
     search,
     brands,
     sort_by = "created_at",
+    is_active,
   } = req.query;
 
   const bundles = await BundleService.getAllBundles({
@@ -36,6 +37,7 @@ const getAllBundles = asyncHandler(async (req, res) => {
     price_range,
     brands,
     sort_by,
+    is_active,
   });
 
   // Convert Decimal128 to numbers for all bundles

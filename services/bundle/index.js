@@ -10,7 +10,8 @@ const getAllBundles = async ({
   price_range,
   sort_by,
   rating,
-  brands
+  brands,
+  is_active,
 }) => {
   return await BundleRepository.getAllBundles({
     page,
@@ -22,7 +23,8 @@ const getAllBundles = async ({
     price_range,
     sort_by,
     rating,
-    brands
+    brands,
+    is_active,
   });
 };
 
