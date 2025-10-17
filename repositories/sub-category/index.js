@@ -1,10 +1,20 @@
 const SubCategory = require("../../models/subCategoryModel.js");
 
 const getAllSubCategories = async (filter = {}, skip = 0, limit = 50) => {
-  return await SubCategory.find(filter)
+  const subCategories = await SubCategory.find(filter)
     .skip(skip)
     .limit(limit)
     .populate("category");
+  
+  const total = await SubCategory.countDocuments(filter);
+  
+  return {
+    subCategories,
+    total,
+    page: Math.floor(skip / limit) + 1,
+    per_page: limit,
+    total_pages: Math.ceil(total / limit),
+  };
 };
 
 const getSubCategoryById = async (id) => {
