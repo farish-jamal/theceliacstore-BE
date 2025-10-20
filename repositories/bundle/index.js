@@ -13,6 +13,7 @@ const getAllBundles = async ({
   price_range,
   brands,
   sort_by,
+  is_active,
 }) => {
   const skip = (page - 1) * per_page;
   const match = {};
@@ -49,6 +50,12 @@ const getAllBundles = async ({
     } else if (minPrice !== Infinity) {
       match.price = { $gte: minPrice };
     }
+  }
+
+  // Handle is_active filter
+  if (is_active !== undefined && is_active !== null) {
+    const isActiveValue = is_active === 'true' || is_active === true;
+    match.is_active = isActiveValue;
   }
 
   // Handle sort options
