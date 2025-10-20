@@ -7,6 +7,7 @@ const Product = require("../../models/productsModel");
 const Order = require("../../models/orderModel");
 const Category = require("../../models/categoryModel");
 const Bundle = require("../../models/bundleModel");
+const { calculateShippingCost, calculateShippingByZone } = require("../../utils/shipping/calculateShipping");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -143,6 +144,7 @@ const createOrder = asyncHandler(async (req, res) => {
 
   let totalAmount = 0;
   let discountedTotalAmount = 0;
+  let totalWeightGrams = 0;
   const orderItems = [];
   for (const cartItem of cart.items) {
     if (cartItem.type === "product") {
@@ -156,6 +158,12 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
+      
+      // Calculate weight for shipping
+      if (product.weight_in_grams) {
+        totalWeightGrams += product.weight_in_grams * cartItem.quantity;
+      }
+      
       orderItems.push({
         type: "product",
         product: {
@@ -181,6 +189,17 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
+      
+      // Calculate weight for bundles - sum up all products in the bundle
+      if (bundle.products && Array.isArray(bundle.products)) {
+        for (const bundleProduct of bundle.products) {
+          const product = await Product.findById(bundleProduct.product);
+          if (product && product.weight_in_grams) {
+            totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * cartItem.quantity;
+          }
+        }
+      }
+      
       orderItems.push({
         type: "bundle",
         bundle: {
@@ -206,12 +225,25 @@ const createOrder = asyncHandler(async (req, res) => {
   delete addressSnapshot.updatedAt;
   delete addressSnapshot.__v;
 
+  // Calculate shipping cost based on pincode and total weight
+  // This creates a snapshot of the shipping cost at order time
+  const { shippingCost, shippingDetails } = await calculateShippingCost(
+    address.pincode,
+    totalWeightGrams
+  );
+
+  // Calculate final total amount (discounted total + shipping)
+  const finalTotalAmount = discountedTotalAmount + shippingCost;
+
   const order = new Order({
     user: userId,
     items: orderItems,
     address: addressSnapshot,
     totalAmount,
     discountedTotalAmount,
+    shippingCost,
+    shippingDetails,
+    finalTotalAmount,
     status: "pending",
   });
   await order.save();
@@ -384,6 +416,7 @@ const editOrder = asyncHandler(async (req, res) => {
 
   const { addressId, items } = req.body;
   let addressSnapshot = order.address;
+  let newAddress = null;
   if (addressId) {
     const address = await Address.findOne({ _id: addressId, user: userId });
     if (!address) {
@@ -391,6 +424,7 @@ const editOrder = asyncHandler(async (req, res) => {
         .status(400)
         .json(new ApiResponse(400, null, "Address not found", false));
     }
+    newAddress = address;
     addressSnapshot = { ...address.toObject() };
     delete addressSnapshot._id;
     delete addressSnapshot.user;
@@ -401,6 +435,7 @@ const editOrder = asyncHandler(async (req, res) => {
 
   let totalAmount = 0;
   let discountedTotalAmount = 0;
+  let totalWeightGrams = 0;
   const orderItems = [];
   if (Array.isArray(items)) {
     for (const item of items) {
@@ -415,6 +450,12 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
+        
+        // Calculate weight for shipping
+        if (product.weight_in_grams) {
+          totalWeightGrams += product.weight_in_grams * item.quantity;
+        }
+        
         orderItems.push({
           type: "product",
           product: {
@@ -440,6 +481,17 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
+        
+        // Calculate weight for bundles
+        if (bundle.products && Array.isArray(bundle.products)) {
+          for (const bundleProduct of bundle.products) {
+            const product = await Product.findById(bundleProduct.product);
+            if (product && product.weight_in_grams) {
+              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+            }
+          }
+        }
+        
         orderItems.push({
           type: "bundle",
           bundle: {
@@ -463,8 +515,43 @@ const editOrder = asyncHandler(async (req, res) => {
     order.items = orderItems;
     order.totalAmount = totalAmount;
     order.discountedTotalAmount = discountedTotalAmount;
+  } else {
+    // If no items provided, recalculate weight from existing items
+    for (const item of order.items) {
+      if (item.type === "product" && item.product) {
+        const product = await Product.findById(item.product._id);
+        if (product && product.weight_in_grams) {
+          totalWeightGrams += product.weight_in_grams * item.quantity;
+        }
+      } else if (item.type === "bundle" && item.bundle) {
+        const bundle = await Bundle.findById(item.bundle._id);
+        if (bundle && bundle.products && Array.isArray(bundle.products)) {
+          for (const bundleProduct of bundle.products) {
+            const product = await Product.findById(bundleProduct.product);
+            if (product && product.weight_in_grams) {
+              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+            }
+          }
+        }
+      }
+    }
+    discountedTotalAmount = parseFloat(order.discountedTotalAmount.toString());
   }
+  
   order.address = addressSnapshot;
+  
+  // Recalculate shipping if address or items changed
+  if (newAddress || orderItems.length > 0) {
+    const pincode = newAddress ? newAddress.pincode : order.address.pincode;
+    const { shippingCost, shippingDetails } = await calculateShippingCost(
+      pincode,
+      totalWeightGrams
+    );
+    order.shippingCost = shippingCost;
+    order.shippingDetails = shippingDetails;
+    order.finalTotalAmount = discountedTotalAmount + shippingCost;
+  }
+  
   await order.save();
 
   return res
@@ -912,6 +999,124 @@ const updateOrder = asyncHandler(async (req, res) => {
       );
       order.discountedTotalAmount = mongoose.Types.Decimal128.fromString(
         discountedTotalAmount.toString()
+      );
+    }
+
+    // Handle shipping updates with three options:
+    // 1. Manual override (updateData.shippingCost)
+    // 2. Recalculate by specific delivery zone (updateData.deliveryZoneId)
+    // 3. Auto-recalculate if address or items changed
+    
+    let shippingUpdated = false;
+    let newShippingCost = 0;
+    let newShippingDetails = null;
+    
+    // Option 1: Manual shipping cost override
+    if (updateData.shippingCost !== undefined) {
+      newShippingCost = parseFloat(updateData.shippingCost);
+      
+      if (newShippingCost < 0) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, "Shipping cost cannot be negative", false));
+      }
+      
+      // Keep existing shipping details but mark as manual override
+      newShippingDetails = order.shippingDetails || {
+        deliveryZoneId: null,
+        zoneName: "Manual Override",
+        pricingType: "manual",
+        isManual: true,
+        calculatedAt: new Date(),
+      };
+      newShippingDetails.isManual = true;
+      newShippingDetails.calculatedAt = new Date();
+      shippingUpdated = true;
+    }
+    // Option 2: Recalculate by specific delivery zone
+    else if (updateData.deliveryZoneId) {
+      let totalWeightGrams = 0;
+      
+      // Calculate total weight from current order items
+      for (const item of order.items) {
+        if (item.type === "product" && item.product) {
+          const product = await Product.findById(item.product._id);
+          if (product && product.weight_in_grams) {
+            totalWeightGrams += product.weight_in_grams * item.quantity;
+          }
+        } else if (item.type === "bundle" && item.bundle) {
+          const bundle = await Bundle.findById(item.bundle._id);
+          if (bundle && bundle.products && Array.isArray(bundle.products)) {
+            for (const bundleProduct of bundle.products) {
+              const product = await Product.findById(bundleProduct.product);
+              if (product && product.weight_in_grams) {
+                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              }
+            }
+          }
+        }
+      }
+      
+      const result = await calculateShippingByZone(
+        updateData.deliveryZoneId,
+        totalWeightGrams
+      );
+      
+      if (result.shippingDetails) {
+        newShippingCost = result.shippingCost;
+        newShippingDetails = result.shippingDetails;
+        shippingUpdated = true;
+      } else {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, "Invalid or inactive delivery zone", false));
+      }
+    }
+    // Option 3: Auto-recalculate if address or items changed
+    else if (updateData.addressId || updateData.products || updateData.bundles) {
+      let totalWeightGrams = 0;
+      
+      // Calculate total weight from current order items
+      for (const item of order.items) {
+        if (item.type === "product" && item.product) {
+          const product = await Product.findById(item.product._id);
+          if (product && product.weight_in_grams) {
+            totalWeightGrams += product.weight_in_grams * item.quantity;
+          }
+        } else if (item.type === "bundle" && item.bundle) {
+          const bundle = await Bundle.findById(item.bundle._id);
+          if (bundle && bundle.products && Array.isArray(bundle.products)) {
+            for (const bundleProduct of bundle.products) {
+              const product = await Product.findById(bundleProduct.product);
+              if (product && product.weight_in_grams) {
+                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              }
+            }
+          }
+        }
+      }
+      
+      // Recalculate shipping based on new weight and/or address
+      const pincode = order.address.pincode;
+      const result = await calculateShippingCost(
+        pincode,
+        totalWeightGrams
+      );
+      
+      newShippingCost = result.shippingCost;
+      newShippingDetails = result.shippingDetails;
+      shippingUpdated = true;
+    }
+    
+    // Update shipping if any of the above conditions triggered
+    if (shippingUpdated) {
+      order.shippingCost = newShippingCost;
+      order.shippingDetails = newShippingDetails;
+      
+      // Recalculate final total
+      const discountedTotal = parseFloat(order.discountedTotalAmount.toString());
+      order.finalTotalAmount = mongoose.Types.Decimal128.fromString(
+        (discountedTotal + newShippingCost).toString()
       );
     }
 

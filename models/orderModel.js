@@ -85,6 +85,24 @@ const OrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Decimal128,
     required: true
   },
+  shippingCost: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0
+  },
+  shippingDetails: {
+    deliveryZoneId: mongoose.Schema.Types.ObjectId,
+    zoneName: String,
+    pricingType: String,
+    isManual: {
+      type: Boolean,
+      default: false
+    },
+    calculatedAt: Date
+  },
+  finalTotalAmount: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: true
+  },
   status: {
     type: String,
     enum: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"],
@@ -100,6 +118,12 @@ OrderSchema.set("toJSON", {
     }
     if (ret.discountedTotalAmount) {
       ret.discountedTotalAmount = parseFloat(ret.discountedTotalAmount.toString());
+    }
+    if (ret.shippingCost) {
+      ret.shippingCost = parseFloat(ret.shippingCost.toString());
+    }
+    if (ret.finalTotalAmount) {
+      ret.finalTotalAmount = parseFloat(ret.finalTotalAmount.toString());
     }
 
     // Ensure ret.items is an array before mapping
