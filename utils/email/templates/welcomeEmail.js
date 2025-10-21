@@ -1,18 +1,4 @@
-/**
- * Helper to convert Decimal128 to number
- */
-const toNumber = (value) => {
-  if (!value) return 0;
-  if (typeof value === 'number') return value;
-  if (value.$numberDecimal) return parseFloat(value.$numberDecimal);
-  if (value.toString && typeof value.toString === 'function') {
-    const strValue = value.toString();
-    if (strValue !== '[object Object]') {
-      return parseFloat(strValue);
-    }
-  }
-  return 0;
-};
+const { toNumber } = require('../emailHelpers');
 
 /**
  * Generate welcome email for new user

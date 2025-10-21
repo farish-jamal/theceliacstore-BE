@@ -1,20 +1,4 @@
-/**
- * Helper to convert Decimal128 to number
- */
-const toNumber = (value) => {
-  if (!value) return 0;
-  if (typeof value === 'number') return value;
-  // Handle Decimal128 object format: { '$numberDecimal': '150' }
-  if (value.$numberDecimal) return parseFloat(value.$numberDecimal);
-  // Handle regular toString
-  if (value.toString && typeof value.toString === 'function') {
-    const strValue = value.toString();
-    if (strValue !== '[object Object]') {
-      return parseFloat(strValue);
-    }
-  }
-  return 0;
-};
+const { toNumber, formatAddress } = require('../emailHelpers');
 
 /**
  * Generate order confirmation email for customer
@@ -237,16 +221,9 @@ const generateCustomerOrderConfirmation = (order, user) => {
                                               </td>
                                             </tr>
                                             <tr>
-                                              <td valign="top" style="padding: 0px 0px 7px 0px;">
-                                                <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
-                                                  ${order.address.address}, ${order.address.locality}
-                                                </div>
-                                              </td>
-                                            </tr>
-                                            <tr>
                                               <td valign="top">
                                                 <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
-                                                  ${order.address.city}, ${order.address.state} ${order.address.pincode}
+                                                  ${formatAddress(order.address)}
                                                 </div>
                                               </td>
                                             </tr>
@@ -728,11 +705,9 @@ const generateCompanyOrderNotification = (order, user) => {
                     📍 Shipping Address
                   </h3>
                   <div style="background-color: #f9fafb; border-radius: 12px; padding: 20px; border: 1px solid #e5e7eb;">
-                    <div style="font-weight: 700; color: #111827; font-size: 15px; margin-bottom: 12px;">${order.address.name}</div>
+                    <div style="font-weight: 700; color: #111827; font-size: 15px; margin-bottom: 12px;">${order.address.name || ''}</div>
                     <div style="color: #4b5563; font-size: 14px; line-height: 1.7;">
-                      ${order.address.address}<br>
-                      ${order.address.locality}<br>
-                      ${order.address.city}, ${order.address.state} - <strong>${order.address.pincode}</strong>
+                      ${formatAddress(order.address)}
                     </div>
                     ${order.address.landmark ? `<div style="color: #6b7280; font-size: 13px; margin-top: 8px;">Landmark: ${order.address.landmark}</div>` : ""}
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
