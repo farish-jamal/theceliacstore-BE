@@ -1,7 +1,7 @@
 const { asyncHandler } = require("../../common/asyncHandler.js");
 const ApiResponse = require("../../utils/ApiResponse.js");
 const CartService = require("../../services/cart/index.js");
-const DeliveryZoneService = require("../../services/delivery-zone/index.js");
+const DeliveryZoneService = require("../../services/delivery_zone/index.js");
 const Address = require("../../models/addressModel.js");
 
 const getCart = asyncHandler(async (req, res) => {

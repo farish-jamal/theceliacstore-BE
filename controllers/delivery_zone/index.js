@@ -1,6 +1,6 @@
 const { asyncHandler } = require("../../common/asyncHandler.js");
 const ApiResponse = require("../../utils/ApiResponse.js");
-const DeliveryZoneService = require("../../services/delivery-zone/index.js");
+const DeliveryZoneService = require("../../services/delivery_zone/index.js");
 const mongoose = require("mongoose");
 
 const getAllDeliveryZones = asyncHandler(async (req, res) => {

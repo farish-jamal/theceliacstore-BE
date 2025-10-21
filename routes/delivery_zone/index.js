@@ -1,5 +1,5 @@
 const express = require("express");
-const DeliveryZoneController = require("../../controllers/delivery-zone/index.js");
+const DeliveryZoneController = require("../../controllers/delivery_zone/index.js");
 const {
   adminOrSuperAdmin,
 } = require("../../middleware/auth/adminMiddleware.js");

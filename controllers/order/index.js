@@ -7,7 +7,9 @@ const Product = require("../../models/productsModel");
 const Order = require("../../models/orderModel");
 const Category = require("../../models/categoryModel");
 const Bundle = require("../../models/bundleModel");
+const User = require("../../models/userModel");
 const { calculateShippingCost, calculateShippingByZone } = require("../../utils/shipping/calculateShipping");
+const emailQueue = require("../../queues/emailQueue");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -251,6 +253,28 @@ const createOrder = asyncHandler(async (req, res) => {
   cart.items = [];
   await cart.save();
 
+  // Queue order confirmation emails (async - won't block response)
+  const user = await User.findById(userId);
+  
+  // Mark email as queued
+  order.emailTracking = {
+    confirmation: {
+      status: "queued",
+      queuedAt: new Date(),
+      attempts: 0
+    },
+    statusUpdates: []
+  };
+  await order.save();
+  
+  await emailQueue.add("order-confirmation", {
+    type: "order-confirmation",
+    data: {
+      order: order.toObject(),
+      user: user.toObject(),
+    },
+  });
+
   return res
     .status(201)
     .json(new ApiResponse(201, order, "Order created successfully", true));
@@ -319,35 +343,34 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
       .json(new ApiResponse(404, null, "Order not found", false));
   }
 
-  // Check if status transition is valid (optional business logic)
-  const currentStatus = order.status;
-  const statusTransitions = {
-    pending: ["confirmed", "cancelled"],
-    confirmed: ["processing", "cancelled"],
-    processing: ["shipped", "cancelled"],
-    shipped: ["delivered"],
-    delivered: [], // Final state
-    cancelled: [], // Final state
-  };
-
-  if (
-    statusTransitions[currentStatus] &&
-    !statusTransitions[currentStatus].includes(status)
-  ) {
-    return res
-      .status(400)
-      .json(
-        new ApiResponse(
-          400,
-          null,
-          `Cannot change status from ${currentStatus} to ${status}`,
-          false
-        )
-      );
-  }
-
+  const previousStatus = order.status;
   order.status = status;
   await order.save();
+
+  // Queue status update emails (async - won't block response)
+  const user = await User.findById(order.user);
+  
+  // Add status update email tracking entry as queued
+  if (!order.emailTracking) {
+    order.emailTracking = { confirmation: {}, statusUpdates: [] };
+  }
+  order.emailTracking.statusUpdates.push({
+    status: order.status,
+    emailStatus: "queued",
+    queuedAt: new Date(),
+    attempts: 0
+  });
+  await order.save();
+  
+  await emailQueue.add("status-update", {
+    type: "status-update",
+    data: {
+      order: order.toObject(),
+      user: user.toObject(),
+      previousStatus,
+      updatedBy: req.admin ? req.admin.toObject() : null,
+    },
+  });
 
   return res
     .status(200)
@@ -832,7 +855,86 @@ const updateOrder = asyncHandler(async (req, res) => {
       order.address = addressSnapshot;
     }
 
-    // Update multiple products and bundles
+    // Add new products to order
+    if (updateData.addProducts && Array.isArray(updateData.addProducts)) {
+      for (const productData of updateData.addProducts) {
+        const { productId, quantity } = productData;
+        const qty = parseInt(quantity);
+
+        if (qty <= 0) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Quantity must be positive for product ${productId}`,
+                false
+              )
+            );
+        }
+
+        // Check if product already exists in order
+        const existingIndex = order.items.findIndex(
+          (item) =>
+            item.type === "product" && item.product._id.toString() === productId
+        );
+
+        if (existingIndex !== -1) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Product ${productId} already exists in order. Use 'products' array to update quantity.`,
+                false
+              )
+            );
+        }
+
+        const product = await Product.findById(productId);
+        if (!product) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Product ${productId} not found`,
+                false
+              )
+            );
+        }
+
+        const price = parseFloat(product.price.toString());
+        const discountedPrice = product.discounted_price
+          ? parseFloat(product.discounted_price.toString())
+          : price;
+        const itemTotal = price * qty;
+        const discountedItemTotal = discountedPrice * qty;
+
+        // Add new product to order items
+        order.items.push({
+          type: "product",
+          product: {
+            _id: product._id,
+            name: product.name,
+            price: product.price,
+            discounted_price: product.discounted_price,
+            banner_image: product.banner_image,
+            sub_category: product.sub_category,
+          },
+          quantity: qty,
+          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          discounted_total_amount: mongoose.Types.Decimal128.fromString(
+            discountedItemTotal.toString()
+          ),
+        });
+      }
+    }
+
+    // Update existing products in order
     if (updateData.products && Array.isArray(updateData.products)) {
       for (const productUpdate of updateData.products) {
         const { productId, newQuantity } = productUpdate;
@@ -864,7 +966,7 @@ const updateOrder = asyncHandler(async (req, res) => {
               new ApiResponse(
                 400,
                 null,
-                `Product ${productId} not found in order`,
+                `Product ${productId} not found in order. Use 'addProducts' array to add new products.`,
                 false
               )
             );
@@ -907,7 +1009,87 @@ const updateOrder = asyncHandler(async (req, res) => {
       }
     }
 
-    // Update multiple bundles
+    // Add new bundles to order
+    if (updateData.addBundles && Array.isArray(updateData.addBundles)) {
+      for (const bundleData of updateData.addBundles) {
+        const { bundleId, quantity } = bundleData;
+        const qty = parseInt(quantity);
+
+        if (qty <= 0) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Quantity must be positive for bundle ${bundleId}`,
+                false
+              )
+            );
+        }
+
+        // Check if bundle already exists in order
+        const existingIndex = order.items.findIndex(
+          (item) =>
+            item.type === "bundle" && item.bundle._id.toString() === bundleId
+        );
+
+        if (existingIndex !== -1) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Bundle ${bundleId} already exists in order. Use 'bundles' array to update quantity.`,
+                false
+              )
+            );
+        }
+
+        const bundle = await Bundle.findById(bundleId);
+        if (!bundle) {
+          return res
+            .status(400)
+            .json(
+              new ApiResponse(
+                400,
+                null,
+                `Bundle ${bundleId} not found`,
+                false
+              )
+            );
+        }
+
+        const price = parseFloat(bundle.price.toString());
+        const discountedPrice = bundle.discounted_price
+          ? parseFloat(bundle.discounted_price.toString())
+          : price;
+        const itemTotal = price * qty;
+        const discountedItemTotal = discountedPrice * qty;
+
+        // Add new bundle to order items
+        order.items.push({
+          type: "bundle",
+          bundle: {
+            _id: bundle._id,
+            name: bundle.name,
+            price: bundle.price,
+            discounted_price: bundle.discounted_price,
+            images: bundle.images,
+            description: bundle.description,
+            products: bundle.products,
+          },
+          quantity: qty,
+          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          discounted_total_amount: mongoose.Types.Decimal128.fromString(
+            discountedItemTotal.toString()
+          ),
+        });
+      }
+    }
+
+    // Update existing bundles in order
     if (updateData.bundles && Array.isArray(updateData.bundles)) {
       for (const bundleUpdate of updateData.bundles) {
         const { bundleId, newQuantity } = bundleUpdate;
@@ -939,7 +1121,7 @@ const updateOrder = asyncHandler(async (req, res) => {
               new ApiResponse(
                 400,
                 null,
-                `Bundle ${bundleId} not found in order`,
+                `Bundle ${bundleId} not found in order. Use 'addBundles' array to add new bundles.`,
                 false
               )
             );
@@ -983,7 +1165,7 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
 
     // Recalculate totals after item updates
-    if (updateData.products || updateData.bundles) {
+    if (updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
       let totalAmount = 0;
       let discountedTotalAmount = 0;
 
@@ -1073,7 +1255,7 @@ const updateOrder = asyncHandler(async (req, res) => {
       }
     }
     // Option 3: Auto-recalculate if address or items changed
-    else if (updateData.addressId || updateData.products || updateData.bundles) {
+    else if (updateData.addressId || updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
       let totalWeightGrams = 0;
       
       // Calculate total weight from current order items
@@ -1320,6 +1502,88 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Get email tracking status for an order (for customer support)
+ */
+const getOrderEmailStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID", false));
+  }
+
+  const order = await Order.findById(id).select("_id emailTracking createdAt status");
+  
+  if (!order) {
+    return res
+      .status(404)
+      .json(new ApiResponse(404, null, "Order not found", false));
+  }
+
+  // Build email status summary
+  const emailStatus = {
+    orderId: order._id,
+    orderStatus: order.status,
+    orderDate: order.createdAt,
+    confirmation: {
+      status: order.emailTracking?.confirmation?.status || "queued",
+      queuedAt: order.emailTracking?.confirmation?.queuedAt || null,
+      sentAt: order.emailTracking?.confirmation?.sentAt || null,
+      deliveredAt: order.emailTracking?.confirmation?.deliveredAt || null,
+      bouncedAt: order.emailTracking?.confirmation?.bouncedAt || null,
+      failedAt: order.emailTracking?.confirmation?.failedAt || null,
+      opened: order.emailTracking?.confirmation?.opened || false,
+      openedAt: order.emailTracking?.confirmation?.openedAt || null,
+      openCount: order.emailTracking?.confirmation?.openCount || 0,
+      clicked: order.emailTracking?.confirmation?.clicked || false,
+      clickedAt: order.emailTracking?.confirmation?.clickedAt || null,
+      clickCount: order.emailTracking?.confirmation?.clickCount || 0,
+      attempts: order.emailTracking?.confirmation?.attempts || 0,
+      lastAttempt: order.emailTracking?.confirmation?.lastAttemptAt || null,
+      error: order.emailTracking?.confirmation?.error || null,
+    },
+    statusUpdates: order.emailTracking?.statusUpdates || [],
+    summary: {
+      totalEmailsSent: (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) + 
+        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "sent").length || 0),
+      totalEmailsFailed: (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) + 
+        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "failed").length || 0),
+      totalEmailsOpened: (order.emailTracking?.confirmation?.opened ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(s => s.opened).length || 0),
+      totalEmailsClicked: (order.emailTracking?.confirmation?.clicked ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(s => s.clicked).length || 0),
+      lastEmailSent: getLastEmailSent(order.emailTracking),
+    },
+  };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, emailStatus, "Email status retrieved successfully", true));
+});
+
+/**
+ * Helper function to get last email sent date
+ */
+function getLastEmailSent(emailTracking) {
+  const dates = [];
+  
+  if (emailTracking?.confirmation?.sentAt) {
+    dates.push(new Date(emailTracking.confirmation.sentAt));
+  }
+  
+  if (emailTracking?.statusUpdates) {
+    emailTracking.statusUpdates.forEach(update => {
+      if (update.sentAt) {
+        dates.push(new Date(update.sentAt));
+      }
+    });
+  }
+  
+  return dates.length > 0 ? new Date(Math.max(...dates)) : null;
+}
+
 module.exports = {
   createOrder,
   getOrderHistory,
@@ -1331,4 +1595,5 @@ module.exports = {
   getProductsWithOrderCounts,
   getOrdersByProductId,
   getOrderByIdFormUser,
+  getOrderEmailStatus,
 };

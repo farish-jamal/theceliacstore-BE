@@ -1,4 +1,4 @@
-const DeliveryZoneRepository = require("../../repositories/delivery-zone/index.js");
+const DeliveryZoneRepository = require("../../repositories/delivery_zone/index.js");
 
 const getAllDeliveryZones = async ({ page, per_page, search, sort, is_active }) => {
   const skip = (page - 1) * per_page;

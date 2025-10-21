@@ -103,6 +103,55 @@ const OrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Decimal128,
     required: true
   },
+  emailTracking: {
+    confirmation: {
+      status: { 
+        type: String, 
+        enum: ["queued", "sent", "delivered", "bounced", "failed"],
+        default: "queued"
+      },
+      queuedAt: { type: Date },
+      sentAt: { type: Date },
+      deliveredAt: { type: Date },
+      bouncedAt: { type: Date },
+      failedAt: { type: Date },
+      opened: { type: Boolean, default: false },
+      openedAt: { type: Date },
+      openCount: { type: Number, default: 0 },
+      clicked: { type: Boolean, default: false },
+      clickedAt: { type: Date },
+      clickCount: { type: Number, default: 0 },
+      attempts: { type: Number, default: 0 },
+      lastAttemptAt: { type: Date },
+      error: { type: String },
+      bounceReason: { type: String }
+    },
+    statusUpdates: [
+      {
+        status: String,
+        emailStatus: { 
+          type: String, 
+          enum: ["queued", "sent", "delivered", "bounced", "failed"],
+          default: "queued"
+        },
+        queuedAt: { type: Date },
+        sentAt: { type: Date },
+        deliveredAt: { type: Date },
+        bouncedAt: { type: Date },
+        failedAt: { type: Date },
+        opened: { type: Boolean, default: false },
+        openedAt: { type: Date },
+        openCount: { type: Number, default: 0 },
+        clicked: { type: Boolean, default: false },
+        clickedAt: { type: Date },
+        clickCount: { type: Number, default: 0 },
+        attempts: { type: Number, default: 0 },
+        lastAttemptAt: { type: Date },
+        error: { type: String },
+        bounceReason: { type: String }
+      }
+    ]
+  },
   status: {
     type: String,
     enum: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"],

@@ -2,6 +2,7 @@ const { asyncHandler } = require("../../../common/asyncHandler");
 const User = require("../../../models/userModel");
 const ApiResponse = require("../../../utils/ApiResponse");
 const { generateAccessToken } = require("../../../utils/auth");
+const emailQueue = require("../../../queues/emailQueue");
 
 const getAllUsers = asyncHandler(async (req, res) => {
   const superAdminId = req.admin._id;
@@ -55,6 +56,19 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   const accessToken = generateAccessToken(user._id);
+
+  // Queue welcome email
+  await emailQueue.add("welcome", {
+    type: "welcome",
+    data: {
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+      },
+    },
+  });
 
   const data = {
     id: user.id,
