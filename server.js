@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
+const path = require("path");
 const connectDB = require("./config/db.js");
 const swaggerSpec = require("./swagger.js");
 const swaggerUI = require("swagger-ui-express");
@@ -39,7 +40,11 @@ app.use(cookieParser());
 app.use(cors({
   origin: "*",
   credentials: true
-}));app.use(morgan("dev"));
+}));
+app.use(morgan("dev"));
+
+// Serve static files from public directory
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use("/api/auth/admin", authAdminRoutes);

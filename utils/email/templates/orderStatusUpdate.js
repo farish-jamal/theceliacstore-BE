@@ -22,58 +22,34 @@ const toNumber = (value) => {
 const getStatusInfo = (status) => {
   const statusMap = {
     pending: {
-      color: "#f59e0b",
-      gradient: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-      bgColor: "#fef3c7",
-      icon: "⏳",
-      emoji: "⏰",
-      title: "Order Pending",
-      message: "We've received your order and it's awaiting confirmation.",
+      color: "#ffcb65",
+      message: "Your order is pending confirmation.",
+      emoji: "⏳"
     },
     confirmed: {
-      color: "#3b82f6",
-      gradient: "linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)",
-      bgColor: "#dbeafe",
-      icon: "✓",
-      emoji: "✅",
-      title: "Order Confirmed",
-      message: "Great news! Your order has been confirmed and will be processed soon.",
+      color: "#5ec4ff",
+      message: "Your order has been confirmed and will be processed soon.",
+      emoji: "✓"
     },
     processing: {
-      color: "#8b5cf6",
-      gradient: "linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)",
-      bgColor: "#ede9fe",
-      icon: "⚙️",
-      emoji: "📦",
-      title: "Processing",
+      color: "#ff9065",
       message: "We're carefully preparing your items for shipment.",
+      emoji: "📦"
     },
     shipped: {
-      color: "#06b6d4",
-      gradient: "linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%)",
-      bgColor: "#cffafe",
-      icon: "🚚",
-      emoji: "🚀",
-      title: "Shipped",
-      message: "Your order is on its way! Track your package below.",
+      color: "#a78bfa",
+      message: "Your order has been shipped and is on its way!",
+      emoji: "🚚"
     },
     delivered: {
       color: "#10b981",
-      gradient: "linear-gradient(135deg, #34d399 0%, #10b981 100%)",
-      bgColor: "#d1fae5",
-      icon: "✅",
-      emoji: "🎉",
-      title: "Delivered",
-      message: "Success! Your order has been delivered. Enjoy your purchase!",
+      message: "Your order has been delivered successfully!",
+      emoji: "✅"
     },
     cancelled: {
       color: "#ef4444",
-      gradient: "linear-gradient(135deg, #f87171 0%, #ef4444 100%)",
-      bgColor: "#fee2e2",
-      icon: "❌",
-      emoji: "🔴",
-      title: "Cancelled",
-      message: "Your order has been cancelled. If you have questions, please contact support.",
+      message: "Your order has been cancelled.",
+      emoji: "❌"
     },
   };
 
@@ -89,210 +65,308 @@ const getStatusInfo = (status) => {
  */
 const generateCustomerStatusUpdate = (order, user, previousStatus) => {
   const statusInfo = getStatusInfo(order.status);
-  const prevStatusInfo = getStatusInfo(previousStatus);
   const updateDate = new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
   
-  const updateTime = new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  
+  const subtotal = toNumber(order.discountedTotalAmount);
+  const shipping = toNumber(order.shippingCost);
   const total = toNumber(order.finalTotalAmount);
+  const baseUrl = process.env.APP_URL || 'http://localhost:5000';
 
   return `
     <!DOCTYPE html>
-    <html lang="en">
+    <html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
     <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Order Update - ${statusInfo.title}</title>
+      <meta charset="UTF-8" />
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+      <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://fonts.googleapis.com/css?family=Outfit:ital,wght@0,400;0,500;0,600" rel="stylesheet" />
+      <title>Order Status Update - Celic Store</title>
+      <style>
+        html, body { margin: 0 !important; padding: 0 !important; min-height: 100% !important; width: 100% !important; -webkit-font-smoothing: antialiased; }
+        * { -ms-text-size-adjust: 100%; }
+        table, td, th { mso-table-lspace: 0 !important; mso-table-rspace: 0 !important; border-collapse: collapse; }
+        img { border: 0; outline: 0; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic; }
+      </style>
     </head>
-    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f3f4f6; padding: 40px 0;">
+    <body style="width: 100% !important; min-height: 100% !important; margin: 0 !important; padding: 0 !important; background-color: #e3dad5;">
+      <table style="width: 100%; min-width: 600px; background-color: #e3dad5;" bgcolor="#e3dad5" border="0" cellspacing="0" cellpadding="0">
         <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07); overflow: hidden; max-width: 600px;">
-              
-              <!-- Header with Status Icon -->
+          <td align="center" valign="top">
+            <table align="center" border="0" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background: ${statusInfo.gradient}; padding: 40px 32px; text-align: center;">
-                  <div style="background-color: rgba(255,255,255,0.3); display: inline-block; padding: 16px; border-radius: 50%; margin-bottom: 16px;">
-                    <span style="font-size: 48px;">${statusInfo.emoji}</span>
-                  </div>
-                  <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">
-                    ${statusInfo.title}
-                  </h1>
-                  <p style="margin: 12px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">
-                    Order #${order._id.toString().slice(-8).toUpperCase()}
-                  </p>
+                <td style="padding: 20px 0px;" align="left" valign="top">
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                      <td valign="top">
+                        
+                        <!-- Header -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 24px 40px 40px 40px; background-color: #1a110c;" bgcolor="#1a110c">
+                              
+                              <!-- Logo -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 32px 0px;">
+                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                         style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Title -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 12px 0px;">
+                                    <div style="line-height: 128%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 38px; font-weight: 500; color: #ffffff; text-align: center;">
+                                      Order Status Updated ${statusInfo.emoji}
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Subtitle -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 12px 0px;">
+                                    <div style="line-height: 156%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 19px; font-weight: normal; color: #ffffffcc; text-align: center;">
+                                      ${statusInfo.message}
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Track Button -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" style="padding: 0px 0px 16px 0px;">
+                                    <a style="display: inline-block; border-radius: 126px; background-color: ${statusInfo.color}; padding: 12px 24px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-weight: 600; font-size: 16px; line-height: 150%; letter-spacing: -0.2px; color: #1a110c; text-align: center; text-decoration: none;" 
+                                       href="${baseUrl}/orders/${order._id}">
+                                      View Order Details
+                                    </a>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Summary Box -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #ffffff0d; border-radius: 8px; margin-top: 24px;">
+                                <tr>
+                                  <td style="padding: 20px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 500; color: #ffcb65;">
+                                            Summary
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 500; color: ${statusInfo.color};">
+                                            ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
+                                            #${order._id.toString().slice(-4).toUpperCase()} • ${updateDate}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 600; color: #ffffff;">
+                                            ₹${total.toFixed(2)}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                  <td style="padding: 20px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 12px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 500; color: #ffcb65;">
+                                            Shipping Address
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">
+                                            ${order.address.name}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 7px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
+                                            ${order.address.address}, ${order.address.locality}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
+                                            ${order.address.city}, ${order.address.state} ${order.address.pincode}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Ornament Top -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="background-color: #ffffff;" bgcolor="#ffffff">
+                              <img src="${baseUrl}/public/email-assets/image-17102359012892-013f76a5.png" width="600" height="auto" alt="" 
+                                   style="display: block; width: 100%; height: auto; border: 0;" />
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Contact Section -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 40px 40px; background-color: #ffffff;" bgcolor="#ffffff">
+                              
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 28px 0px;">
+                                    <div style="line-height: 128%; letter-spacing: -0.6px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 500; color: #1a110c; text-align: center;">
+                                      Any problems with your order?
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Contact Cards -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td width="50%" valign="top" style="padding-right: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <img src="${baseUrl}/public/email-assets/image-17102359013265-4c1af5f3.png" width="38" height="38" alt="Email" 
+                                                     style="display: block; width: 38px; height: 38px; border: 0;" />
+                                              </td>
+                                              <td valign="middle" style="padding-left: 12px;">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Email Us
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  theceliacstore@gmail.com
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                  <td width="50%" valign="top" style="padding-left: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <img src="${baseUrl}/public/email-assets/image-17102359014306-18c6d4ff.png" width="38" height="38" alt="Phone" 
+                                                     style="display: block; width: 38px; height: 38px; border: 0;" />
+                                              </td>
+                                              <td valign="middle" style="padding-left: 12px;">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Call Us
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  +91 98101 07887
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Ornament Bottom -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="background-color: #ffffff;" bgcolor="#ffffff">
+                              <img src="${baseUrl}/public/email-assets/image-17102359016849-7afa6a57.png" width="600" height="auto" alt="" 
+                                   style="display: block; width: 100%; height: auto; border: 0;" />
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Footer -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 40px 40px 40px 40px; background-color: #1a110c;" bgcolor="#1a110c">
+                              
+                              <!-- Logo -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 20px 0px;">
+                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                         style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Social -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" style="padding: 0px 0px 20px 0px;">
+                                    <a href="https://instagram.com/celicstore" style="text-decoration: none; display: inline-block;">
+                                      <img src="${baseUrl}/public/email-assets/193c7e94406b9a9160b8842fcba96582.png" width="20" height="20" alt="Instagram" 
+                                           style="display: block; border: 0; width: 20px; height: 20px;" />
+                                    </a>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Address -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 14px 0px;">
+                                    <div style="font-size: 14px; line-height: 143%; text-align: center; color: #ffffffcc; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                      A373, Defence Colony, New Delhi
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
-              
-              <!-- Status Transition -->
-              <tr>
-                <td style="padding: 32px 32px 24px;">
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 28px; text-align: center;">
-                    <div style="font-size: 13px; color: #6b7280; font-weight: 600; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Status Update</div>
-                    <div style="display: inline-block; background-color: #e5e7eb; color: #374151; padding: 10px 20px; border-radius: 50px; font-size: 14px; font-weight: 600; margin: 0 8px;">
-                      ${prevStatusInfo.icon} ${previousStatus.toUpperCase()}
-                    </div>
-                    <div style="display: inline-block; margin: 0 12px; font-size: 24px; color: ${statusInfo.color};">
-                      →
-                    </div>
-                    <div style="display: inline-block; background: ${statusInfo.gradient}; color: #ffffff; padding: 10px 20px; border-radius: 50px; font-size: 14px; font-weight: 700; margin: 0 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-                      ${statusInfo.icon} ${order.status.toUpperCase()}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Main Message -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background-color: ${statusInfo.bgColor}; border-radius: 12px; padding: 24px; border-left: 4px solid ${statusInfo.color};">
-                    <p style="margin: 0; font-size: 16px; color: #111827; line-height: 1.6;">
-                      <strong>Hi ${user.name || "there"},</strong>
-                    </p>
-                    <p style="margin: 12px 0 0 0; font-size: 15px; color: #374151; line-height: 1.7;">
-                      ${statusInfo.message}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Order Summary -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; border-left: 4px solid #f59e0b;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td width="50%">
-                          <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 4px;">Order ID</div>
-                          <div style="font-size: 16px; color: #78350f; font-weight: 700; font-family: 'Courier New', monospace;">#${order._id.toString().slice(-8).toUpperCase()}</div>
-                        </td>
-                        <td width="50%" align="right">
-                          <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 4px;">Total Amount</div>
-                          <div style="font-size: 20px; color: #78350f; font-weight: 800;">₹${total.toFixed(2)}</div>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Delivery Address -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <h3 style="margin: 0 0 16px 0; color: #111827; font-size: 18px; font-weight: 700;">
-                    📍 Delivery Address
-                  </h3>
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 20px; border: 1px solid #e5e7eb;">
-                    <div style="font-weight: 700; color: #111827; font-size: 15px; margin-bottom: 8px;">${order.address.name}</div>
-                    <div style="color: #4b5563; font-size: 14px; line-height: 1.7;">
-                      ${order.address.address}<br>
-                      ${order.address.locality}<br>
-                      ${order.address.city}, ${order.address.state} - ${order.address.pincode}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              
-              ${order.status === "delivered" ? `
-              <!-- Delivered Success Message -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #10b981; text-align: center;">
-                    <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
-                    <div style="font-size: 18px; font-weight: 700; color: #065f46; margin-bottom: 8px;">
-                      Thank You for Shopping With Us!
-                    </div>
-                    <p style="margin: 0; color: #047857; font-size: 14px; line-height: 1.6;">
-                      We hope you love your purchase! Your satisfaction is our top priority. If you have any questions or concerns, we're here to help.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              ${order.status === "shipped" ? `
-              <!-- Tracking Info -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #06b6d4;">
-                    <div style="font-size: 16px; font-weight: 700; color: #164e63; margin-bottom: 12px;">
-                      📦 Your Package is On The Way!
-                    </div>
-                    <p style="margin: 0; color: #155e75; font-size: 14px; line-height: 1.6;">
-                      Your order has been shipped and will arrive soon. You can track your package or contact us if you have any questions.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              ${order.status === "cancelled" ? `
-              <!-- Cancellation Message -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #ef4444;">
-                    <div style="font-size: 16px; font-weight: 700; color: #991b1b; margin-bottom: 8px;">
-                      Order Cancelled
-                    </div>
-                    <p style="margin: 0; color: #7f1d1d; font-size: 14px; line-height: 1.6;">
-                      If you have any questions about the cancellation or need assistance, please don't hesitate to contact our support team.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              <!-- CTA Button -->
-              ${order.status !== "cancelled" ? `
-              <tr>
-                <td style="padding: 0 32px 32px; text-align: center;">
-                  <a href="${process.env.APP_URL || 'http://localhost:5000'}/orders/${order._id}" 
-                     style="display: inline-block; background: ${statusInfo.gradient}; color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 50px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 14px rgba(0,0,0,0.2);">
-                    View Order Details →
-                  </a>
-                </td>
-              </tr>
-              ` : ""}
-              
-              <!-- Help Section -->
-              <tr>
-                <td style="padding: 0 32px 32px;">
-                  <div style="background-color: #eff6ff; border-radius: 12px; padding: 20px; border-left: 4px solid #3b82f6;">
-                    <div style="font-weight: 600; color: #1e40af; font-size: 15px; margin-bottom: 8px;">
-                      💬 Need Assistance?
-                    </div>
-                    <p style="margin: 0; color: #1e3a8a; font-size: 14px; line-height: 1.6;">
-                      Our customer support team is available 24/7. Feel free to reach out anytime!
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Footer -->
-              <tr>
-                <td style="background-color: #111827; padding: 32px; text-align: center;">
-                  <div style="margin-bottom: 20px;">
-                    <h3 style="margin: 0 0 8px 0; color: #ffffff; font-size: 20px; font-weight: 700;">Celic Store</h3>
-                    <p style="margin: 0; color: #9ca3af; font-size: 13px;">Premium Quality Products</p>
-                  </div>
-                  
-                  <p style="margin: 16px 0 0 0; color: #6b7280; font-size: 12px;">
-                    Updated on ${updateDate} at ${updateTime}
-                  </p>
-                  <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 11px;">
-                    © ${new Date().getFullYear()} Celic Store. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-              
             </table>
           </td>
         </tr>
@@ -303,7 +377,7 @@ const generateCustomerStatusUpdate = (order, user, previousStatus) => {
 };
 
 /**
- * Generate order status update email for company
+ * Generate order status update email for company (same as customer - simple design)
  * @param {Object} order - Order object
  * @param {Object} user - User object
  * @param {string} previousStatus - Previous order status
@@ -311,222 +385,8 @@ const generateCustomerStatusUpdate = (order, user, previousStatus) => {
  * @returns {string} HTML email content
  */
 const generateCompanyStatusUpdate = (order, user, previousStatus, updatedBy) => {
-  const statusInfo = getStatusInfo(order.status);
-  const prevStatusInfo = getStatusInfo(previousStatus);
-  const updateDate = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  
-  const updateTime = new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  
-  const total = toNumber(order.finalTotalAmount);
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Status Update - Admin Notification</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f3f4f6; padding: 40px 0;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07); overflow: hidden; max-width: 600px;">
-              
-              <!-- Header -->
-              <tr>
-                <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 32px; text-align: center;">
-                  <div style="background-color: rgba(255,255,255,0.2); display: inline-block; padding: 12px; border-radius: 50%; margin-bottom: 12px;">
-                    <span style="font-size: 36px;">📝</span>
-                  </div>
-                  <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 700;">
-                    Order Status Updated
-                  </h1>
-                  <p style="margin: 8px 0 0 0; color: #c7d2fe; font-size: 14px;">
-                    Internal Admin Notification
-                  </p>
-                </td>
-              </tr>
-              
-              <!-- Status Transition -->
-              <tr>
-                <td style="padding: 28px 32px;">
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 24px; text-align: center; border: 1px solid #e5e7eb;">
-                    <div style="font-size: 12px; color: #6b7280; font-weight: 700; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Status Transition</div>
-                    <div>
-                      <div style="display: inline-block; background-color: #e5e7eb; color: #4b5563; padding: 10px 24px; border-radius: 50px; font-size: 13px; font-weight: 600;">
-                        ${prevStatusInfo.icon} ${previousStatus.toUpperCase()}
-                      </div>
-                      <div style="display: inline-block; margin: 0 16px; font-size: 24px; color: #6366f1;">
-                        →
-                      </div>
-                      <div style="display: inline-block; background: ${statusInfo.gradient}; color: #ffffff; padding: 10px 24px; border-radius: 50px; font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-                        ${statusInfo.icon} ${order.status.toUpperCase()}
-                      </div>
-                    </div>
-                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-                      <div style="font-size: 13px; color: #6b7280;">
-                        <strong>Updated:</strong> ${updateDate} at ${updateTime}
-                      </div>
-                      ${updatedBy ? `
-                      <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
-                        <strong>By:</strong> ${updatedBy.name || updatedBy.email || "System Admin"}
-                      </div>
-                      ` : ""}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Order Details -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; border-left: 4px solid #f59e0b;">
-                    <h3 style="margin: 0 0 16px 0; color: #78350f; font-size: 16px; font-weight: 700;">
-                      📋 Order Summary
-                    </h3>
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding: 6px 0; color: #92400e; font-size: 13px;">Order ID</td>
-                        <td align="right" style="padding: 6px 0; color: #78350f; font-size: 13px; font-weight: 700; font-family: 'Courier New', monospace;">#${order._id.toString().slice(-8).toUpperCase()}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 6px 0; color: #92400e; font-size: 13px;">Total Amount</td>
-                        <td align="right" style="padding: 6px 0; color: #78350f; font-size: 18px; font-weight: 800;">₹${total.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 6px 0; color: #92400e; font-size: 13px;">Current Status</td>
-                        <td align="right" style="padding: 6px 0;">
-                          <span style="background: ${statusInfo.gradient}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 700;">${order.status.toUpperCase()}</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Customer Info -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 20px; border: 1px solid #e5e7eb;">
-                    <h3 style="margin: 0 0 16px 0; color: #111827; font-size: 16px; font-weight: 700;">
-                      👤 Customer Details
-                    </h3>
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 100px;">Name</td>
-                        <td style="padding: 8px 0; color: #111827; font-size: 14px; font-weight: 600;">${user.name || "N/A"}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Email</td>
-                        <td style="padding: 8px 0;">
-                          <a href="mailto:${user.email}" style="color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 500;">${user.email || "N/A"}</a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Phone</td>
-                        <td style="padding: 8px 0;">
-                          <a href="tel:${order.address.mobile}" style="color: #3b82f6; text-decoration: none; font-size: 14px; font-weight: 500;">${order.address.mobile}</a>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Shipping Address -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 20px; border: 1px solid #e5e7eb;">
-                    <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 16px; font-weight: 700;">
-                      📍 Shipping Address
-                    </h3>
-                    <div style="color: #4b5563; font-size: 14px; line-height: 1.7;">
-                      <strong style="color: #111827;">${order.address.name}</strong><br>
-                      ${order.address.address}<br>
-                      ${order.address.locality}<br>
-                      ${order.address.city}, ${order.address.state} - <strong>${order.address.pincode}</strong>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              
-              ${order.status === "delivered" ? `
-              <!-- Completed Notice -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 20px; border-left: 4px solid #10b981; text-align: center;">
-                    <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #065f46;">
-                      Order Successfully Delivered
-                    </div>
-                    <p style="margin: 8px 0 0 0; color: #047857; font-size: 13px;">
-                      This order has been completed and delivered to the customer.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              ${order.status === "cancelled" ? `
-              <!-- Cancelled Warning -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-radius: 12px; padding: 20px; border-left: 4px solid #ef4444; text-align: center;">
-                    <div style="font-size: 32px; margin-bottom: 8px;">❌</div>
-                    <div style="font-size: 16px; font-weight: 700; color: #991b1b;">
-                      Order Cancelled
-                    </div>
-                    <p style="margin: 8px 0 0 0; color: #7f1d1d; font-size: 13px;">
-                      Please review the cancellation and take any necessary follow-up actions.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              ${order.status === "pending" || order.status === "confirmed" || order.status === "processing" ? `
-              <!-- Action Reminder -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <div style="background-color: #eff6ff; border-radius: 12px; padding: 20px; border-left: 4px solid #3b82f6; text-align: center;">
-                    <div style="font-size: 15px; font-weight: 700; color: #1e40af; margin-bottom: 6px;">
-                      ⚡ Next Steps
-                    </div>
-                    <p style="margin: 0; color: #1e3a8a; font-size: 13px;">
-                      Please continue processing this order and update to the next status when ready.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              ` : ""}
-              
-              <!-- Footer -->
-              <tr>
-                <td style="background-color: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; color: #6b7280; font-size: 12px; font-weight: 500;">
-                    Celic Store Admin System
-                  </p>
-                  <p style="margin: 12px 0 0 0; color: #9ca3af; font-size: 11px;">
-                    Automated notification • ${updateDate} ${updateTime}
-                  </p>
-                </td>
-              </tr>
-              
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
+  // Use same template as customer - simple and clean
+  return generateCustomerStatusUpdate(order, user, previousStatus);
 };
 
 module.exports = {
@@ -534,4 +394,3 @@ module.exports = {
   generateCompanyStatusUpdate,
   getStatusInfo,
 };
-
