@@ -10,6 +10,7 @@ const {
   generateCompanyStatusUpdate,
 } = require("../utils/email/templates/orderStatusUpdate");
 const { generateWelcomeEmail } = require("../utils/email/templates/welcomeEmail");
+const { generateForgotPasswordEmail } = require("../utils/email/templates/forgotPassword");
 const emailConfig = require("../config/email");
 const Order = require("../models/orderModel");
 const Admin = require("../models/adminModel");
@@ -34,6 +35,10 @@ const emailWorker = new Worker(
 
         case "welcome":
           await sendWelcomeEmail(data);
+          break;
+
+        case "forgot-password":
+          await sendForgotPasswordEmail(data);
           break;
 
         default:
@@ -301,6 +306,39 @@ async function sendWelcomeEmail(data) {
     }
   } catch (error) {
     console.error("❌ Welcome email failed:", error.message);
+    throw error;
+  }
+}
+
+/**
+ * Send forgot password email with new password
+ */
+async function sendForgotPasswordEmail(data) {
+  const { user, newPassword } = data;
+  
+  console.log("\n🎯 Processing Forgot Password Email");
+  console.log("👤 User:", user.name, `(${user.email})`);
+  console.log("🔑 New password generated");
+
+  try {
+    if (user.email) {
+      console.log("📨 Preparing password reset email to:", user.email);
+      const forgotPasswordHTML = generateForgotPasswordEmail(user, newPassword);
+      
+      const result = await sendEmail({
+        to: user.email,
+        subject: `Password Reset - Celic Store 🔐`,
+        html: forgotPasswordHTML,
+      });
+
+      if (result.success) {
+        console.log("✅ Password reset email sent successfully");
+      } else {
+        throw new Error("Failed to send password reset email");
+      }
+    }
+  } catch (error) {
+    console.error("❌ Password reset email failed:", error.message);
     throw error;
   }
 }

@@ -3,6 +3,7 @@ const User = require("../../../models/userModel");
 const ApiResponse = require("../../../utils/ApiResponse");
 const { generateAccessToken } = require("../../../utils/auth");
 const emailQueue = require("../../../queues/emailQueue");
+const crypto = require("crypto");
 
 const getAllUsers = asyncHandler(async (req, res) => {
   const superAdminId = req.admin._id;
@@ -154,6 +155,59 @@ const getUserById = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, user, "User fetched successfully", true));
 });
 
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Email is required", false));
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res
+      .status(404)
+      .json(
+        new ApiResponse(404, null, "User not found with this email", false)
+      );
+  }
+
+  // Generate a random secure password (8 characters: alphanumeric + special chars)
+  const newPassword =
+    crypto.randomBytes(4).toString("hex") +
+    String.fromCharCode(65 + Math.floor(Math.random() * 26)) +
+    "!";
+
+  // Update user password (will be hashed by pre-save hook in model)
+  user.password = newPassword;
+  await user.save();
+
+  console.log(`[Forgot Password] Password reset for user: ${user.email}`);
+
+  // Queue email to send new password
+  await emailQueue.add("forgot-password", {
+    type: "forgot-password",
+    data: {
+      user: user.toObject(),
+      newPassword: newPassword, // Send plain password in email (only once)
+    },
+  });
+
+  console.log(`[Forgot Password] Email queued for: ${user.email}`);
+
+  res.json(
+    new ApiResponse(
+      200,
+      null,
+      "Password reset successful! Check your email for the new password.",
+      true
+    )
+  );
+});
+
 module.exports = {
   getAllUsers,
   registerUser,
@@ -161,4 +215,5 @@ module.exports = {
   updateUser,
   deleteUser,
   getUserById,
+  forgotPassword,
 };
