@@ -62,12 +62,7 @@ const registerUser = asyncHandler(async (req, res) => {
   await emailQueue.add("welcome", {
     type: "welcome",
     data: {
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-      },
+      user: user.toObject(),
     },
   });
 

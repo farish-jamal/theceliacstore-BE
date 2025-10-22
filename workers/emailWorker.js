@@ -21,8 +21,6 @@ const emailWorker = new Worker(
   async (job) => {
     const { type, data } = job.data;
 
-    console.log(`Processing email job: ${type} for order ${data.order._id}`);
-
     try {
       switch (type) {
         case "order-confirmation":
@@ -282,9 +280,16 @@ async function sendStatusUpdateEmails(data) {
  * Send welcome email to new user
  */
 async function sendWelcomeEmail(data) {
+  console.log("\n🎯 Processing Welcome Email");
   const { user } = data;
   
-  console.log("\n🎯 Processing Welcome Email");
+  console.log("📊 Data received:", JSON.stringify(data, null, 2));
+  
+  if (!user) {
+    console.error("❌ No user data provided");
+    throw new Error("User data is missing");
+  }
+  
   console.log("👤 New User:", user.name, `(${user.email})`);
 
   try {
@@ -294,7 +299,7 @@ async function sendWelcomeEmail(data) {
       
       const result = await sendEmail({
         to: user.email,
-        subject: `Welcome to Celic Store! 🎉`,
+        subject: `Welcome to Celiac Store! 🎉`,
         html: welcomeHTML,
       });
 
@@ -303,6 +308,9 @@ async function sendWelcomeEmail(data) {
       } else {
         throw new Error("Failed to send welcome email");
       }
+    } else {
+      console.error("❌ No email address found for user");
+      throw new Error("User email is missing");
     }
   } catch (error) {
     console.error("❌ Welcome email failed:", error.message);

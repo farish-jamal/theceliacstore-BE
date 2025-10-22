@@ -11,252 +11,339 @@ const generateWelcomeEmail = (user) => {
     month: "long",
     day: "numeric",
   });
+  const baseUrl = process.env.APP_URL || 'http://localhost:8000';
 
   return `
     <!DOCTYPE html>
-    <html lang="en">
+    <html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
     <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <meta charset="UTF-8" />
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+      <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://fonts.googleapis.com/css?family=Outfit:ital,wght@0,400;0,500;0,600" rel="stylesheet" />
       <title>Welcome to Celic Store!</title>
+      <style>
+        html, body { margin: 0 !important; padding: 0 !important; min-height: 100% !important; width: 100% !important; -webkit-font-smoothing: antialiased; }
+        * { -ms-text-size-adjust: 100%; }
+        table, td, th { mso-table-lspace: 0 !important; mso-table-rspace: 0 !important; border-collapse: collapse; }
+        img { border: 0; outline: 0; line-height: 100%; text-decoration: none; -ms-interpolation-mode: bicubic; }
+      </style>
     </head>
-    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #f3f4f6; padding: 40px 0;">
+    <body style="width: 100% !important; min-height: 100% !important; margin: 0 !important; padding: 0 !important; background-color: #e3dad5;">
+      <table style="width: 100%; min-width: 600px; background-color: #e3dad5;" bgcolor="#e3dad5" border="0" cellspacing="0" cellpadding="0">
         <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07); overflow: hidden; max-width: 600px;">
-              
-              <!-- Header with Celebration -->
+          <td align="center" valign="top">
+            <table align="center" border="0" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%); padding: 48px 32px; text-align: center;">
-                  <div style="font-size: 64px; margin-bottom: 16px;">🎉</div>
-                  <h1 style="margin: 0; color: #ffffff; font-size: 36px; font-weight: 700; letter-spacing: -0.5px;">
-                    Welcome to Celic Store!
-                  </h1>
-                  <p style="margin: 16px 0 0 0; color: #fce7f3; font-size: 16px; font-weight: 400;">
-                    Your account has been created successfully
-                  </p>
-                </td>
-              </tr>
-              
-              <!-- Welcome Message -->
-              <tr>
-                <td style="padding: 40px 32px 32px;">
-                  <div style="text-align: center; margin-bottom: 24px;">
-                    <div style="display: inline-block; background: linear-gradient(135deg, #34d399 0%, #10b981 100%); color: white; padding: 12px 32px; border-radius: 50px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
-                      ✓ Account Created
-                    </div>
-                  </div>
-                  
-                  <p style="margin: 0; font-size: 18px; color: #111827; text-align: center; line-height: 1.6;">
-                    Hi <strong style="color: #ec4899;">${user.name || "there"}</strong>! 👋
-                  </p>
-                  <p style="margin: 16px 0 0 0; font-size: 15px; color: #6b7280; text-align: center; line-height: 1.7;">
-                    Thank you for joining Celic Store! We're excited to have you as part of our community. Get ready to discover premium quality products curated just for you.
-                  </p>
-                </td>
-              </tr>
-              
-              <!-- Account Details -->
-              <tr>
-                <td style="padding: 0 32px 32px;">
-                  <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #f59e0b;">
-                    <h3 style="margin: 0 0 16px 0; color: #78350f; font-size: 16px; font-weight: 700;">
-                      📋 Your Account Details
-                    </h3>
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding: 8px 0; color: #92400e; font-size: 13px; width: 120px;">Name</td>
-                        <td style="padding: 8px 0; color: #78350f; font-size: 14px; font-weight: 600;">${user.name || "N/A"}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 0; color: #92400e; font-size: 13px;">Email</td>
-                        <td style="padding: 8px 0; color: #78350f; font-size: 14px; font-weight: 600;">${user.email}</td>
-                      </tr>
-                      ${user.phone ? `
-                      <tr>
-                        <td style="padding: 8px 0; color: #92400e; font-size: 13px;">Phone</td>
-                        <td style="padding: 8px 0; color: #78350f; font-size: 14px; font-weight: 600;">${user.phone}</td>
-                      </tr>
-                      ` : ""}
-                      <tr>
-                        <td style="padding: 8px 0; color: #92400e; font-size: 13px;">Joined</td>
-                        <td style="padding: 8px 0; color: #78350f; font-size: 14px; font-weight: 600;">${joinDate}</td>
-                      </tr>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- What's Next -->
-              <tr>
-                <td style="padding: 0 32px 24px;">
-                  <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 22px; font-weight: 700; text-align: center;">
-                    🚀 What's Next?
-                  </h2>
-                  
-                  <!-- Feature Cards -->
-                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 16px;">
+                <td style="padding: 20px 0px;" align="left" valign="top">
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%">
                     <tr>
-                      <td style="padding: 0 8px 16px 0; width: 50%;">
-                        <div style="background-color: #eff6ff; border-radius: 12px; padding: 20px; border-left: 4px solid #3b82f6; height: 100%;">
-                          <div style="font-size: 28px; margin-bottom: 8px;">🛍️</div>
-                          <div style="font-weight: 700; color: #1e40af; font-size: 15px; margin-bottom: 6px;">Start Shopping</div>
-                          <p style="margin: 0; color: #1e3a8a; font-size: 13px; line-height: 1.5;">
-                            Browse our curated collection of premium products
-                          </p>
-                        </div>
-                      </td>
-                      <td style="padding: 0 0 16px 8px; width: 50%;">
-                        <div style="background-color: #f0fdf4; border-radius: 12px; padding: 20px; border-left: 4px solid #10b981; height: 100%;">
-                          <div style="font-size: 28px; margin-bottom: 8px;">🎁</div>
-                          <div style="font-weight: 700; color: #065f46; font-size: 15px; margin-bottom: 6px;">Special Offers</div>
-                          <p style="margin: 0; color: #047857; font-size: 13px; line-height: 1.5;">
-                            Get exclusive deals on your favorite items
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 0 8px 0 0; width: 50%;">
-                        <div style="background-color: #fef3c7; border-radius: 12px; padding: 20px; border-left: 4px solid #f59e0b; height: 100%;">
-                          <div style="font-size: 28px; margin-bottom: 8px;">📍</div>
-                          <div style="font-weight: 700; color: #92400e; font-size: 15px; margin-bottom: 6px;">Save Addresses</div>
-                          <p style="margin: 0; color: #78350f; font-size: 13px; line-height: 1.5;">
-                            Add your delivery addresses for faster checkout
-                          </p>
-                        </div>
-                      </td>
-                      <td style="padding: 0 0 0 8px; width: 50%;">
-                        <div style="background-color: #fae8ff; border-radius: 12px; padding: 20px; border-left: 4px solid #a855f7; height: 100%;">
-                          <div style="font-size: 28px; margin-bottom: 8px;">🔔</div>
-                          <div style="font-weight: 700; color: #6b21a8; font-size: 15px; margin-bottom: 6px;">Track Orders</div>
-                          <p style="margin: 0; color: #7e22ce; font-size: 13px; line-height: 1.5;">
-                            Get real-time updates on your orders
-                          </p>
-                        </div>
+                      <td valign="top">
+                        
+                        <!-- Header -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 24px 40px 40px 40px; background-color: #1a110c;" bgcolor="#1a110c">
+                              
+                              <!-- Logo -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 32px 0px;">
+                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                         style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Title -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 12px 0px;">
+                                    <div style="line-height: 128%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 38px; font-weight: 500; color: #ffffff; text-align: center;">
+                                      Welcome to Celic Store! 🎉
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Subtitle -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 12px 0px;">
+                                    <div style="line-height: 156%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 19px; font-weight: normal; color: #ffffffcc; text-align: center;">
+                                      Your account has been created successfully
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Welcome Button -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" style="padding: 0px 0px 16px 0px;">
+                                    <a style="display: inline-block; border-radius: 126px; background-color: #ffcb65; padding: 12px 24px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-weight: 600; font-size: 16px; line-height: 150%; letter-spacing: -0.2px; color: #1a110c; text-align: center; text-decoration: none;" 
+                                       href="${baseUrl}/products">
+                                      Start Shopping Now
+                                    </a>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Account Summary Box -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #ffffff0d; border-radius: 8px; margin-top: 24px;">
+                                <tr>
+                                  <td style="padding: 20px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 500; color: #ffcb65;">
+                                            Account Details
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">
+                                            ${user.name || "N/A"}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top" style="padding: 0px 0px 8px 0px;">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
+                                            ${user.email}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td valign="top">
+                                          <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
+                                            Joined ${joinDate}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Ornament Top -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="background-color: #ffffff;" bgcolor="#ffffff">
+                              <img src="${baseUrl}/public/email-assets/image-17102359012892-013f76a5.png" width="600" height="auto" alt="" 
+                                   style="display: block; width: 100%; height: auto; border: 0;" />
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Main Content -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 40px 40px; background-color: #ffffff;" bgcolor="#ffffff">
+                              
+                              <!-- Welcome Message -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 28px 0px;">
+                                    <div style="line-height: 128%; letter-spacing: -0.6px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 500; color: #1a110c; text-align: center;">
+                                      What's Next?
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Feature Cards -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td width="50%" valign="top" style="padding-right: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <div style="font-size: 32px; margin-right: 12px;">🛍️</div>
+                                              </td>
+                                              <td valign="middle">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Start Shopping
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  Browse our premium collection
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                  <td width="50%" valign="top" style="padding-left: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <div style="font-size: 32px; margin-right: 12px;">🎁</div>
+                                              </td>
+                                              <td valign="middle">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Special Offers
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  Get exclusive deals
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Contact Section -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 0px 40px 40px 40px; background-color: #ffffff;" bgcolor="#ffffff">
+                              
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 28px 0px;">
+                                    <div style="line-height: 128%; letter-spacing: -0.6px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 32px; font-weight: 500; color: #1a110c; text-align: center;">
+                                      Need Help?
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Contact Cards -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td width="50%" valign="top" style="padding-right: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <img src="${baseUrl}/public/email-assets/image-17102359013265-4c1af5f3.png" width="38" height="38" alt="Email" 
+                                                     style="display: block; width: 38px; height: 38px; border: 0;" />
+                                              </td>
+                                              <td valign="middle" style="padding-left: 12px;">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Email Us
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  theceliacstore@gmail.com
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                  <td width="50%" valign="top" style="padding-left: 8px;">
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                      <tr>
+                                        <td style="padding: 12px; background-color: #fcedd0; border-radius: 12px;">
+                                          <table border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                              <td valign="middle">
+                                                <img src="${baseUrl}/public/email-assets/image-17102359014306-18c6d4ff.png" width="38" height="38" alt="Phone" 
+                                                     style="display: block; width: 38px; height: 38px; border: 0;" />
+                                              </td>
+                                              <td valign="middle" style="padding-left: 12px;">
+                                                <div style="line-height: 133%; letter-spacing: -0.2px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 500; color: #1b1b1b;">
+                                                  Call Us
+                                                </div>
+                                                <div style="font-size: 14px; line-height: 143%; color: #2a1e19; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                                  +91 98101 07887
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Ornament Bottom -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="background-color: #ffffff;" bgcolor="#ffffff">
+                              <img src="${baseUrl}/public/email-assets/image-17102359016849-7afa6a57.png" width="600" height="auto" alt="" 
+                                   style="display: block; width: 100%; height: auto; border: 0;" />
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Footer -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" align="center" style="width: 600px; max-width: 600px;">
+                          <tr>
+                            <td style="padding: 40px 40px 40px 40px; background-color: #1a110c;" bgcolor="#1a110c">
+                              
+                              <!-- Logo -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 20px 0px;">
+                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                         style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Social -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" style="padding: 0px 0px 20px 0px;">
+                                    <a href="https://instagram.com/celicstore" style="text-decoration: none; display: inline-block;">
+                                      <img src="${baseUrl}/public/email-assets/193c7e94406b9a9160b8842fcba96582.png" width="20" height="20" alt="Instagram" 
+                                           style="display: block; border: 0; width: 20px; height: 20px;" />
+                                    </a>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                              <!-- Address -->
+                              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                                <tr>
+                                  <td align="center" valign="top" style="padding: 0px 0px 14px 0px;">
+                                    <div style="font-size: 14px; line-height: 143%; text-align: center; color: #ffffffcc; font-family: 'Outfit', Arial, Helvetica, sans-serif;">
+                                      A373, Defence Colony, New Delhi
+                                    </div>
+                                  </td>
+                                </tr>
+                              </table>
+                              
+                            </td>
+                          </tr>
+                        </table>
+                        
                       </td>
                     </tr>
                   </table>
                 </td>
               </tr>
-              
-              <!-- CTA Button -->
-              <tr>
-                <td style="padding: 0 32px 32px; text-align: center;">
-                  <a href="${process.env.APP_URL || 'http://localhost:5000'}/products" 
-                     style="display: inline-block; background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%); color: #ffffff; text-decoration: none; padding: 18px 48px; border-radius: 50px; font-weight: 700; font-size: 16px; box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4); letter-spacing: 0.3px;">
-                    Start Shopping Now →
-                  </a>
-                </td>
-              </tr>
-              
-              <!-- Benefits Section -->
-              <tr>
-                <td style="padding: 0 32px 32px;">
-                  <div style="background-color: #f9fafb; border-radius: 12px; padding: 28px; border: 1px solid #e5e7eb;">
-                    <h3 style="margin: 0 0 20px 0; color: #111827; font-size: 18px; font-weight: 700; text-align: center;">
-                      ✨ Why Shop With Us?
-                    </h3>
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding: 12px 0;">
-                          <div style="display: flex; align-items: flex-start;">
-                            <div style="font-size: 24px; margin-right: 12px;">✓</div>
-                            <div>
-                              <div style="font-weight: 600; color: #111827; font-size: 14px; margin-bottom: 4px;">Premium Quality</div>
-                              <div style="color: #6b7280; font-size: 13px;">Carefully curated products from trusted brands</div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 0;">
-                          <div style="display: flex; align-items: flex-start;">
-                            <div style="font-size: 24px; margin-right: 12px;">🚚</div>
-                            <div>
-                              <div style="font-weight: 600; color: #111827; font-size: 14px; margin-bottom: 4px;">Fast Delivery</div>
-                              <div style="color: #6b7280; font-size: 13px;">Quick and reliable shipping to your doorstep</div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 0;">
-                          <div style="display: flex; align-items: flex-start;">
-                            <div style="font-size: 24px; margin-right: 12px;">🔒</div>
-                            <div>
-                              <div style="font-weight: 600; color: #111827; font-size: 14px; margin-bottom: 4px;">Secure Payments</div>
-                              <div style="color: #6b7280; font-size: 13px;">Safe and encrypted payment processing</div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 0;">
-                          <div style="display: flex; align-items: flex-start;">
-                            <div style="font-size: 24px; margin-right: 12px;">💬</div>
-                            <div>
-                              <div style="font-weight: 600; color: #111827; font-size: 14px; margin-bottom: 4px;">24/7 Support</div>
-                              <div style="color: #6b7280; font-size: 13px;">Our team is always here to help you</div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Help Section -->
-              <tr>
-                <td style="padding: 0 32px 32px;">
-                  <div style="background-color: #eff6ff; border-radius: 12px; padding: 24px; border-left: 4px solid #3b82f6; text-align: center;">
-                    <div style="font-weight: 700; color: #1e40af; font-size: 16px; margin-bottom: 8px;">
-                      💡 Need Help Getting Started?
-                    </div>
-                    <p style="margin: 0; color: #1e3a8a; font-size: 14px; line-height: 1.6;">
-                      Check out our help center or contact our support team. We're here to make your shopping experience amazing!
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Footer -->
-              <tr>
-                <td style="background-color: #111827; padding: 36px 32px; text-align: center;">
-                  <div style="margin-bottom: 24px;">
-                    <h3 style="margin: 0 0 12px 0; color: #ffffff; font-size: 24px; font-weight: 700;">Celic Store</h3>
-                    <p style="margin: 0; color: #9ca3af; font-size: 14px;">Premium Quality Products, Delivered With Care</p>
-                  </div>
-                  
-                  <div style="margin: 28px 0; padding: 24px 0; border-top: 1px solid #374151; border-bottom: 1px solid #374151;">
-                    <p style="margin: 0 0 12px 0; color: #d1d5db; font-size: 14px; font-weight: 600;">Connect With Us</p>
-                    <div style="margin-top: 16px;">
-                      <a href="#" style="display: inline-block; margin: 0 10px; color: #9ca3af; text-decoration: none; font-size: 28px;">📘</a>
-                      <a href="#" style="display: inline-block; margin: 0 10px; color: #9ca3af; text-decoration: none; font-size: 28px;">📷</a>
-                      <a href="#" style="display: inline-block; margin: 0 10px; color: #9ca3af; text-decoration: none; font-size: 28px;">🐦</a>
-                      <a href="#" style="display: inline-block; margin: 0 10px; color: #9ca3af; text-decoration: none; font-size: 28px;">💼</a>
-                    </div>
-                  </div>
-                  
-                  <p style="margin: 20px 0 8px 0; color: #9ca3af; font-size: 13px;">
-                    © ${new Date().getFullYear()} Celic Store. All rights reserved.
-                  </p>
-                  <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 12px;">
-                    You're receiving this because you created an account at Celic Store
-                  </p>
-                  <p style="margin: 16px 0 0 0;">
-                    <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 12px; margin: 0 8px;">Privacy Policy</a>
-                    <span style="color: #4b5563;">•</span>
-                    <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 12px; margin: 0 8px;">Terms</a>
-                    <span style="color: #4b5563;">•</span>
-                    <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 12px; margin: 0 8px;">Unsubscribe</a>
-                  </p>
-                </td>
-              </tr>
-              
             </table>
           </td>
         </tr>
