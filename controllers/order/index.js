@@ -18,7 +18,9 @@ const {
   sendStatusUpdateEmails,
 } = require("../../utils/email/directEmailService");
 const { sendEmail } = require("../../config/email");
-const { generateCustomerOrderConfirmation } = require("../../utils/email/templates/orderConfirmation");
+const {
+  generateCustomerOrderConfirmation,
+} = require("../../utils/email/templates/orderConfirmation");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -282,30 +284,20 @@ const createOrder = asyncHandler(async (req, res) => {
   // Send emails asynchronously (non-blocking)
   setImmediate(async () => {
     try {
-      setImmediate(async () => {
-    try {
-      const htmlContent = generateCustomerOrderConfirmation(order.toObject(), user.toObject());
+      const htmlContent = generateCustomerOrderConfirmation(
+        order.toObject(),
+        user.toObject()
+      );
       const emailOptions = {
         from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: `Order Received - ${order._id}`,
         html: htmlContent,
       };
-
       const emailSent = await sendEmail(emailOptions);
-
-      if (emailSent.accepted.length > 0) {
-        console.log("✅ Status update email sent successfully:", emailSent);
-      }
+      console.log("✅ Status update email sent:", emailSent.messageId);
     } catch (error) {
-      console.error("❌ Failed to send status update emails:", error.message);
-    }
-  });
-    } catch (error) {
-      console.error(
-        "❌ Failed to send order confirmation emails:",
-        error.message
-      );
+      console.error("❌ Failed to send status update email:", error.message);
     }
   });
 
