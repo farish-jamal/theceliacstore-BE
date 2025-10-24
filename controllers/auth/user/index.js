@@ -2,7 +2,8 @@ const { asyncHandler } = require("../../../common/asyncHandler");
 const User = require("../../../models/userModel");
 const ApiResponse = require("../../../utils/ApiResponse");
 const { generateAccessToken } = require("../../../utils/auth");
-const emailQueue = require("../../../queues/emailQueue");
+// const emailQueue = require("../../../queues/emailQueue"); // Commented out - using direct email service
+const { sendWelcomeEmail, sendForgotPasswordEmail } = require("../../../utils/email/directEmailService");
 const crypto = require("crypto");
 
 const getAllUsers = asyncHandler(async (req, res) => {
@@ -58,13 +59,23 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const accessToken = generateAccessToken(user._id);
 
-  // Queue welcome email
-  await emailQueue.add("welcome", {
-    type: "welcome",
-    data: {
+  // Send welcome email directly
+  try {
+    await sendWelcomeEmail({
       user: user.toObject(),
-    },
-  });
+    });
+  } catch (error) {
+    console.error("❌ Failed to send welcome email:", error.message);
+    // Welcome email failure doesn't block user registration
+  }
+
+  // Commented out Redis queue usage - keeping for future use
+  // await emailQueue.add("welcome", {
+  //   type: "welcome",
+  //   data: {
+  //     user: user.toObject(),
+  //   },
+  // });
 
   const data = {
     id: user.id,
@@ -182,14 +193,25 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   console.log(`[Forgot Password] Password reset for user: ${user.email}`);
 
-  // Queue email to send new password
-  await emailQueue.add("forgot-password", {
-    type: "forgot-password",
-    data: {
+  // Send forgot password email directly
+  try {
+    await sendForgotPasswordEmail({
       user: user.toObject(),
       newPassword: newPassword, // Send plain password in email (only once)
-    },
-  });
+    });
+  } catch (error) {
+    console.error("❌ Failed to send forgot password email:", error.message);
+    // Email failure doesn't block password reset
+  }
+
+  // Commented out Redis queue usage - keeping for future use
+  // await emailQueue.add("forgot-password", {
+  //   type: "forgot-password",
+  //   data: {
+  //     user: user.toObject(),
+  //     newPassword: newPassword, // Send plain password in email (only once)
+  //   },
+  // });
 
   console.log(`[Forgot Password] Email queued for: ${user.email}`);
 

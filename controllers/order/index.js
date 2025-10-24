@@ -9,7 +9,8 @@ const Category = require("../../models/categoryModel");
 const Bundle = require("../../models/bundleModel");
 const User = require("../../models/userModel");
 const { calculateShippingCost, calculateShippingByZone } = require("../../utils/shipping/calculateShipping");
-const emailQueue = require("../../queues/emailQueue");
+// const emailQueue = require("../../queues/emailQueue"); // Commented out - using direct email service
+const { sendOrderConfirmationEmails, sendStatusUpdateEmails } = require("../../utils/email/directEmailService");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -253,10 +254,10 @@ const createOrder = asyncHandler(async (req, res) => {
   cart.items = [];
   await cart.save();
 
-  // Queue order confirmation emails (async - won't block response)
+  // Send order confirmation emails directly (async - won't block response)
   const user = await User.findById(userId);
   
-  // Mark email as queued
+  // Mark email as queued initially
   order.emailTracking = {
     confirmation: {
       status: "queued",
@@ -267,13 +268,25 @@ const createOrder = asyncHandler(async (req, res) => {
   };
   await order.save();
   
-  await emailQueue.add("order-confirmation", {
-    type: "order-confirmation",
-    data: {
+  // Send emails directly using the new service
+  try {
+    await sendOrderConfirmationEmails({
       order: order.toObject(),
       user: user.toObject(),
-    },
-  });
+    });
+  } catch (error) {
+    console.error("❌ Failed to send order confirmation emails:", error.message);
+    // Email status will be updated to "failed" by the direct email service
+  }
+
+  // Commented out Redis queue usage - keeping for future use
+  // await emailQueue.add("order-confirmation", {
+  //   type: "order-confirmation",
+  //   data: {
+  //     order: order.toObject(),
+  //     user: user.toObject(),
+  //   },
+  // });
 
   return res
     .status(201)
@@ -347,7 +360,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   order.status = status;
   await order.save();
 
-  // Queue status update emails (async - won't block response)
+  // Send status update emails directly (async - won't block response)
   const user = await User.findById(order.user);
   
   // Add status update email tracking entry as queued
@@ -362,15 +375,29 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   });
   await order.save();
   
-  await emailQueue.add("status-update", {
-    type: "status-update",
-    data: {
+  // Send emails directly using the new service
+  try {
+    await sendStatusUpdateEmails({
       order: order.toObject(),
       user: user.toObject(),
       previousStatus,
       updatedBy: req.admin ? req.admin.toObject() : null,
-    },
-  });
+    });
+  } catch (error) {
+    console.error("❌ Failed to send status update emails:", error.message);
+    // Email status will be updated to "failed" by the direct email service
+  }
+
+  // Commented out Redis queue usage - keeping for future use
+  // await emailQueue.add("status-update", {
+  //   type: "status-update",
+  //   data: {
+  //     order: order.toObject(),
+  //     user: user.toObject(),
+  //     previousStatus,
+  //     updatedBy: req.admin ? req.admin.toObject() : null,
+  //   },
+  // });
 
   return res
     .status(200)
