@@ -59,15 +59,16 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const accessToken = generateAccessToken(user._id);
 
-  // Send welcome email directly
-  try {
-    await sendWelcomeEmail({
-      user: user.toObject(),
-    });
-  } catch (error) {
-    console.error("❌ Failed to send welcome email:", error.message);
-    // Welcome email failure doesn't block user registration
-  }
+  // Send welcome email asynchronously (non-blocking)
+  setImmediate(async () => {
+    try {
+      await sendWelcomeEmail({
+        user: user.toObject(),
+      });
+    } catch (error) {
+      console.error("❌ Failed to send welcome email:", error.message);
+    }
+  });
 
   // Commented out Redis queue usage - keeping for future use
   // await emailQueue.add("welcome", {
@@ -193,16 +194,17 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   console.log(`[Forgot Password] Password reset for user: ${user.email}`);
 
-  // Send forgot password email directly
-  try {
-    await sendForgotPasswordEmail({
-      user: user.toObject(),
-      newPassword: newPassword, // Send plain password in email (only once)
-    });
-  } catch (error) {
-    console.error("❌ Failed to send forgot password email:", error.message);
-    // Email failure doesn't block password reset
-  }
+  // Send forgot password email asynchronously (non-blocking)
+  setImmediate(async () => {
+    try {
+      await sendForgotPasswordEmail({
+        user: user.toObject(),
+        newPassword: newPassword, // Send plain password in email (only once)
+      });
+    } catch (error) {
+      console.error("❌ Failed to send forgot password email:", error.message);
+    }
+  });
 
   // Commented out Redis queue usage - keeping for future use
   // await emailQueue.add("forgot-password", {

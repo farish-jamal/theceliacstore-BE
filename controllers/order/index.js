@@ -268,16 +268,17 @@ const createOrder = asyncHandler(async (req, res) => {
   };
   await order.save();
   
-  // Send emails directly using the new service
-  try {
-    await sendOrderConfirmationEmails({
-      order: order.toObject(),
-      user: user.toObject(),
-    });
-  } catch (error) {
-    console.error("❌ Failed to send order confirmation emails:", error.message);
-    // Email status will be updated to "failed" by the direct email service
-  }
+  // Send emails asynchronously (non-blocking)
+  setImmediate(async () => {
+    try {
+      await sendOrderConfirmationEmails({
+        order: order.toObject(),
+        user: user.toObject(),
+      });
+    } catch (error) {
+      console.error("❌ Failed to send order confirmation emails:", error.message);
+    }
+  });
 
   // Commented out Redis queue usage - keeping for future use
   // await emailQueue.add("order-confirmation", {
@@ -375,18 +376,19 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   });
   await order.save();
   
-  // Send emails directly using the new service
-  try {
-    await sendStatusUpdateEmails({
-      order: order.toObject(),
-      user: user.toObject(),
-      previousStatus,
-      updatedBy: req.admin ? req.admin.toObject() : null,
-    });
-  } catch (error) {
-    console.error("❌ Failed to send status update emails:", error.message);
-    // Email status will be updated to "failed" by the direct email service
-  }
+  // Send emails asynchronously (non-blocking)
+  setImmediate(async () => {
+    try {
+      await sendStatusUpdateEmails({
+        order: order.toObject(),
+        user: user.toObject(),
+        previousStatus,
+        updatedBy: req.admin ? req.admin.toObject() : null,
+      });
+    } catch (error) {
+      console.error("❌ Failed to send status update emails:", error.message);
+    }
+  });
 
   // Commented out Redis queue usage - keeping for future use
   // await emailQueue.add("status-update", {
