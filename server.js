@@ -31,7 +31,7 @@ const emailRoutes = require("./routes/email/index.js");
 connectDB();
 
 // Start email worker
-require("./workers/emailWorker");
+// require("./workers/emailWorker");
 
 const app = express();
 
