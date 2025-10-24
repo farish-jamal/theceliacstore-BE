@@ -24,6 +24,7 @@ const {
   generateCompanyOrderUpdate,
 } = require("../../utils/email/templates/orderConfirmation");
 const Admin = require("../../models/adminModel");
+const razorpay = require("../../config/razorpay");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -1798,6 +1799,101 @@ function getLastEmailSent(emailTracking) {
   return dates.length > 0 ? new Date(Math.max(...dates)) : null;
 }
 
+const generatePaymentLinks = asyncHandler(async (req, res) => {
+  const { orderId, amount } = req.body;
+
+  // Validate input
+  if (!orderId || !amount) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Order ID and amount are required", false));
+  }
+
+  // Validate orderId format
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID format", false));
+  }
+
+  // Validate amount
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Amount must be a positive number", false));
+  }
+
+  try {
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json(new ApiResponse(404, null, "Order not found", false));
+    }
+
+    // Check if payment link already exists
+    if (order.paymentLink) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Payment link already exists for this order", false));
+    }
+
+    // Convert amount to paise (Razorpay expects amount in smallest currency unit)
+    const amountInPaise = Math.round(numericAmount * 100);
+
+    // Create payment link using Razorpay
+    const paymentLinkOptions = {
+      amount: amountInPaise,
+      currency: 'INR',
+      description: `Payment for Order #${orderId}`,
+      customer: {
+        name: order.address.name || 'Customer',
+        contact: order.address.mobile || '',
+        email: req.user?.email || ''
+      },
+      notify: {
+        sms: true,
+        email: true
+      },
+      reminder_enable: true,
+      callback_url: `${process.env.APP_URL}/payment/callback`,
+      callback_method: 'get'
+    };
+
+    const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
+
+    // Update h payorder witment link information
+    order.paymentLink = paymentLink.short_url;
+    order.paymentLinkId = paymentLink.id;
+    await order.save();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {
+        paymentLink: paymentLink.short_url,
+        paymentLinkId: paymentLink.id,
+        orderId: order._id,
+        amount: numericAmount
+      }, "Payment link generated successfully", true));
+
+  } catch (error) {
+    console.error("Error generating payment link:", error);
+    
+    // Handle specific Razorpay errors
+    if (error.error) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, `Payment link creation failed: ${error.error.description || error.error.message}`, false));
+    }
+
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Failed to generate payment link", false));
+  }
+});
+
 module.exports = {
   createOrder,
   getOrderHistory,
@@ -1810,4 +1906,5 @@ module.exports = {
   getOrdersByProductId,
   getOrderByIdFormUser,
   getOrderEmailStatus,
+  generatePaymentLinks,
 };

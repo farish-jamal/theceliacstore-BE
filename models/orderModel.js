@@ -156,6 +156,14 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     enum: ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"],
     default: "pending"
+  },
+  paymentLink: {
+    type: String,
+    default: null
+  },
+  paymentLinkId: {
+    type: String,
+    default: null
   }
 }, { timestamps: true });
 
