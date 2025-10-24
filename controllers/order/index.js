@@ -22,7 +22,6 @@ const {
   generateCompanyOrderNotification,
 } = require("../../utils/email/templates/orderConfirmation");
 const Admin = require("../../models/adminModel");
-const User = require("../../models/userModel");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
