@@ -1,24 +1,33 @@
-const nodemailer = require("nodemailer");
+const SibApiV3Sdk = require("@getbrevo/brevo");
+const brevo = new SibApiV3Sdk.TransactionalEmailsApi();
 
+// Set API key once
+brevo.setApiKey(
+  SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
+
+/**
+ * Send email via Brevo Transactional Email API
+ * @param {Object} emailOptions - { from, to, subject, html }
+ */
 exports.sendEmail = async (emailOptions) => {
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: Number(process.env.EMAIL_PORT),
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER, // your Brevo email/login
-        pass: process.env.EMAIL_PASSWORD, // API key here
+    const sendSmtpEmail = {
+      sender: {
+        name: emailOptions.fromName || "Celic Store",
+        email: emailOptions.from || process.env.EMAIL_FROM_EMAIL,
       },
-      tls: { rejectUnauthorized: false },
-    });
+      to: [{ email: emailOptions.to }],
+      subject: emailOptions.subject,
+      htmlContent: emailOptions.html,
+    };
 
-    await transporter.verify();
-    console.log("✅ SMTP login successful");
-
-    const info = await transporter.sendMail(emailOptions);
-    return info;
+    const response = await brevo.sendTransacEmail(sendSmtpEmail);
+    console.log("✅ Email sent successfully:", response.messageId);
+    return response;
   } catch (error) {
+    console.error("❌ Email sending failed:", error.message);
     throw new Error(`Email sending failed: ${error.message}`);
   }
 };
