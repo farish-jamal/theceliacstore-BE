@@ -33,6 +33,24 @@ const sendEmail = async (options) => {
   
   try {
     console.log("🔧 Creating transporter...");
+    
+    // Check if email config is properly set
+    if (!emailConfig.auth.user || !emailConfig.auth.pass) {
+      console.error("❌ Email configuration missing - USER or PASSWORD not set");
+      return {
+        success: false,
+        error: "Email configuration missing - USER or PASSWORD not set",
+      };
+    }
+    
+    if (!emailConfig.from.email) {
+      console.error("❌ Email configuration missing - FROM EMAIL not set");
+      return {
+        success: false,
+        error: "Email configuration missing - FROM EMAIL not set",
+      };
+    }
+    
     const transporter = createTransporter();
 
     const mailOptions = {
@@ -49,6 +67,7 @@ const sendEmail = async (options) => {
     console.log("👤 SMTP User:", emailConfig.auth.user);
     console.log("🚀 Sending email...");
 
+    // Send email
     const info = await transporter.sendMail(mailOptions);
     
     console.log("✅ EMAIL SENT SUCCESSFULLY!");
