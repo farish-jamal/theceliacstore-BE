@@ -289,7 +289,6 @@ const createOrder = asyncHandler(async (req, res) => {
       );
 
       const emailOptions = {
-        from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: `Order Received - ${order._id}`,
         html: htmlContent,
@@ -400,7 +399,6 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     try {
       const htmlContent = generateCustomerOrderConfirmation(order, user);
       const emailOptions = {
-        from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: `Order Received - ${order._id}`,
         html: htmlContent,
