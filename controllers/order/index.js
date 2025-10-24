@@ -8,9 +8,17 @@ const Order = require("../../models/orderModel");
 const Category = require("../../models/categoryModel");
 const Bundle = require("../../models/bundleModel");
 const User = require("../../models/userModel");
-const { calculateShippingCost, calculateShippingByZone } = require("../../utils/shipping/calculateShipping");
+const {
+  calculateShippingCost,
+  calculateShippingByZone,
+} = require("../../utils/shipping/calculateShipping");
 // const emailQueue = require("../../queues/emailQueue"); // Commented out - using direct email service
-const { sendOrderConfirmationEmails, sendStatusUpdateEmails } = require("../../utils/email/directEmailService");
+const {
+  sendOrderConfirmationEmails,
+  sendStatusUpdateEmails,
+} = require("../../utils/email/directEmailService");
+const { sendEmail } = require("../../config/email");
+const { generateCustomerOrderConfirmation } = require("../../utils/email/templates/orderConfirmation");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -161,12 +169,12 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
-      
+
       // Calculate weight for shipping
       if (product.weight_in_grams) {
         totalWeightGrams += product.weight_in_grams * cartItem.quantity;
       }
-      
+
       orderItems.push({
         type: "product",
         product: {
@@ -192,17 +200,20 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
-      
+
       // Calculate weight for bundles - sum up all products in the bundle
       if (bundle.products && Array.isArray(bundle.products)) {
         for (const bundleProduct of bundle.products) {
           const product = await Product.findById(bundleProduct.product);
           if (product && product.weight_in_grams) {
-            totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * cartItem.quantity;
+            totalWeightGrams +=
+              product.weight_in_grams *
+              bundleProduct.quantity *
+              cartItem.quantity;
           }
         }
       }
-      
+
       orderItems.push({
         type: "bundle",
         bundle: {
@@ -256,27 +267,45 @@ const createOrder = asyncHandler(async (req, res) => {
 
   // Send order confirmation emails directly (async - won't block response)
   const user = await User.findById(userId);
-  
+
   // Mark email as queued initially
   order.emailTracking = {
     confirmation: {
       status: "queued",
       queuedAt: new Date(),
-      attempts: 0
+      attempts: 0,
     },
-    statusUpdates: []
+    statusUpdates: [],
   };
   await order.save();
-  
+
   // Send emails asynchronously (non-blocking)
   setImmediate(async () => {
     try {
-      await sendOrderConfirmationEmails({
-        order: order.toObject(),
-        user: user.toObject(),
-      });
+      setImmediate(async () => {
+    try {
+      const htmlContent = generateCustomerOrderConfirmation(order.toObject(), user.toObject());
+      const emailOptions = {
+        from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: `Order Received - ${order._id}`,
+        html: htmlContent,
+      };
+
+      const emailSent = await sendEmail(emailOptions);
+
+      if (emailSent.accepted.length > 0) {
+        console.log("✅ Status update email sent successfully:", emailSent);
+      }
     } catch (error) {
-      console.error("❌ Failed to send order confirmation emails:", error.message);
+      console.error("❌ Failed to send status update emails:", error.message);
+    }
+  });
+    } catch (error) {
+      console.error(
+        "❌ Failed to send order confirmation emails:",
+        error.message
+      );
     }
   });
 
@@ -363,7 +392,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   // Send status update emails directly (async - won't block response)
   const user = await User.findById(order.user);
-  
+
   // Add status update email tracking entry as queued
   if (!order.emailTracking) {
     order.emailTracking = { confirmation: {}, statusUpdates: [] };
@@ -372,19 +401,28 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     status: order.status,
     emailStatus: "queued",
     queuedAt: new Date(),
-    attempts: 0
+    attempts: 0,
   });
   await order.save();
-  
+
   // Send emails asynchronously (non-blocking)
+
+  console.log(user, "user");
   setImmediate(async () => {
     try {
-      await sendStatusUpdateEmails({
-        order: order.toObject(),
-        user: user.toObject(),
-        previousStatus,
-        updatedBy: req.admin ? req.admin.toObject() : null,
-      });
+      const htmlContent = generateCustomerOrderConfirmation(order, user);
+      const emailOptions = {
+        from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: `Order Received - ${order._id}`,
+        html: htmlContent,
+      };
+
+      const emailSent = await sendEmail(emailOptions);
+
+      if (emailSent.accepted.length > 0) {
+        console.log("✅ Status update email sent successfully:", emailSent);
+      }
     } catch (error) {
       console.error("❌ Failed to send status update emails:", error.message);
     }
@@ -502,12 +540,12 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
-        
+
         // Calculate weight for shipping
         if (product.weight_in_grams) {
           totalWeightGrams += product.weight_in_grams * item.quantity;
         }
-        
+
         orderItems.push({
           type: "product",
           product: {
@@ -533,17 +571,20 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
-        
+
         // Calculate weight for bundles
         if (bundle.products && Array.isArray(bundle.products)) {
           for (const bundleProduct of bundle.products) {
             const product = await Product.findById(bundleProduct.product);
             if (product && product.weight_in_grams) {
-              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              totalWeightGrams +=
+                product.weight_in_grams *
+                bundleProduct.quantity *
+                item.quantity;
             }
           }
         }
-        
+
         orderItems.push({
           type: "bundle",
           bundle: {
@@ -581,7 +622,10 @@ const editOrder = asyncHandler(async (req, res) => {
           for (const bundleProduct of bundle.products) {
             const product = await Product.findById(bundleProduct.product);
             if (product && product.weight_in_grams) {
-              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              totalWeightGrams +=
+                product.weight_in_grams *
+                bundleProduct.quantity *
+                item.quantity;
             }
           }
         }
@@ -589,9 +633,9 @@ const editOrder = asyncHandler(async (req, res) => {
     }
     discountedTotalAmount = parseFloat(order.discountedTotalAmount.toString());
   }
-  
+
   order.address = addressSnapshot;
-  
+
   // Recalculate shipping if address or items changed
   if (newAddress || orderItems.length > 0) {
     const pincode = newAddress ? newAddress.pincode : order.address.pincode;
@@ -603,7 +647,7 @@ const editOrder = asyncHandler(async (req, res) => {
     order.shippingDetails = shippingDetails;
     order.finalTotalAmount = discountedTotalAmount + shippingCost;
   }
-  
+
   await order.save();
 
   return res
@@ -955,7 +999,9 @@ const updateOrder = asyncHandler(async (req, res) => {
             sub_category: product.sub_category,
           },
           quantity: qty,
-          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          total_amount: mongoose.Types.Decimal128.fromString(
+            itemTotal.toString()
+          ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
             discountedItemTotal.toString()
           ),
@@ -1081,12 +1127,7 @@ const updateOrder = asyncHandler(async (req, res) => {
           return res
             .status(400)
             .json(
-              new ApiResponse(
-                400,
-                null,
-                `Bundle ${bundleId} not found`,
-                false
-              )
+              new ApiResponse(400, null, `Bundle ${bundleId} not found`, false)
             );
         }
 
@@ -1110,7 +1151,9 @@ const updateOrder = asyncHandler(async (req, res) => {
             products: bundle.products,
           },
           quantity: qty,
-          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          total_amount: mongoose.Types.Decimal128.fromString(
+            itemTotal.toString()
+          ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
             discountedItemTotal.toString()
           ),
@@ -1194,7 +1237,12 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
 
     // Recalculate totals after item updates
-    if (updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
+    if (
+      updateData.products ||
+      updateData.bundles ||
+      updateData.addProducts ||
+      updateData.addBundles
+    ) {
       let totalAmount = 0;
       let discountedTotalAmount = 0;
 
@@ -1217,21 +1265,28 @@ const updateOrder = asyncHandler(async (req, res) => {
     // 1. Manual override (updateData.shippingCost)
     // 2. Recalculate by specific delivery zone (updateData.deliveryZoneId)
     // 3. Auto-recalculate if address or items changed
-    
+
     let shippingUpdated = false;
     let newShippingCost = 0;
     let newShippingDetails = null;
-    
+
     // Option 1: Manual shipping cost override
     if (updateData.shippingCost !== undefined) {
       newShippingCost = parseFloat(updateData.shippingCost);
-      
+
       if (newShippingCost < 0) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, "Shipping cost cannot be negative", false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              "Shipping cost cannot be negative",
+              false
+            )
+          );
       }
-      
+
       // Keep existing shipping details but mark as manual override
       newShippingDetails = order.shippingDetails || {
         deliveryZoneId: null,
@@ -1247,7 +1302,7 @@ const updateOrder = asyncHandler(async (req, res) => {
     // Option 2: Recalculate by specific delivery zone
     else if (updateData.deliveryZoneId) {
       let totalWeightGrams = 0;
-      
+
       // Calculate total weight from current order items
       for (const item of order.items) {
         if (item.type === "product" && item.product) {
@@ -1261,18 +1316,21 @@ const updateOrder = asyncHandler(async (req, res) => {
             for (const bundleProduct of bundle.products) {
               const product = await Product.findById(bundleProduct.product);
               if (product && product.weight_in_grams) {
-                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+                totalWeightGrams +=
+                  product.weight_in_grams *
+                  bundleProduct.quantity *
+                  item.quantity;
               }
             }
           }
         }
       }
-      
+
       const result = await calculateShippingByZone(
         updateData.deliveryZoneId,
         totalWeightGrams
       );
-      
+
       if (result.shippingDetails) {
         newShippingCost = result.shippingCost;
         newShippingDetails = result.shippingDetails;
@@ -1280,13 +1338,26 @@ const updateOrder = asyncHandler(async (req, res) => {
       } else {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, "Invalid or inactive delivery zone", false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              "Invalid or inactive delivery zone",
+              false
+            )
+          );
       }
     }
     // Option 3: Auto-recalculate if address or items changed
-    else if (updateData.addressId || updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
+    else if (
+      updateData.addressId ||
+      updateData.products ||
+      updateData.bundles ||
+      updateData.addProducts ||
+      updateData.addBundles
+    ) {
       let totalWeightGrams = 0;
-      
+
       // Calculate total weight from current order items
       for (const item of order.items) {
         if (item.type === "product" && item.product) {
@@ -1300,32 +1371,34 @@ const updateOrder = asyncHandler(async (req, res) => {
             for (const bundleProduct of bundle.products) {
               const product = await Product.findById(bundleProduct.product);
               if (product && product.weight_in_grams) {
-                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+                totalWeightGrams +=
+                  product.weight_in_grams *
+                  bundleProduct.quantity *
+                  item.quantity;
               }
             }
           }
         }
       }
-      
+
       // Recalculate shipping based on new weight and/or address
       const pincode = order.address.pincode;
-      const result = await calculateShippingCost(
-        pincode,
-        totalWeightGrams
-      );
-      
+      const result = await calculateShippingCost(pincode, totalWeightGrams);
+
       newShippingCost = result.shippingCost;
       newShippingDetails = result.shippingDetails;
       shippingUpdated = true;
     }
-    
+
     // Update shipping if any of the above conditions triggered
     if (shippingUpdated) {
       order.shippingCost = newShippingCost;
       order.shippingDetails = newShippingDetails;
-      
+
       // Recalculate final total
-      const discountedTotal = parseFloat(order.discountedTotalAmount.toString());
+      const discountedTotal = parseFloat(
+        order.discountedTotalAmount.toString()
+      );
       order.finalTotalAmount = mongoose.Types.Decimal128.fromString(
         (discountedTotal + newShippingCost).toString()
       );
@@ -1543,8 +1616,10 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
       .json(new ApiResponse(400, null, "Invalid order ID", false));
   }
 
-  const order = await Order.findById(id).select("_id emailTracking createdAt status");
-  
+  const order = await Order.findById(id).select(
+    "_id emailTracking createdAt status"
+  );
+
   if (!order) {
     return res
       .status(404)
@@ -1575,21 +1650,38 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
     },
     statusUpdates: order.emailTracking?.statusUpdates || [],
     summary: {
-      totalEmailsSent: (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) + 
-        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "sent").length || 0),
-      totalEmailsFailed: (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) + 
-        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "failed").length || 0),
-      totalEmailsOpened: (order.emailTracking?.confirmation?.opened ? 1 : 0) +
-        (order.emailTracking?.statusUpdates?.filter(s => s.opened).length || 0),
-      totalEmailsClicked: (order.emailTracking?.confirmation?.clicked ? 1 : 0) +
-        (order.emailTracking?.statusUpdates?.filter(s => s.clicked).length || 0),
+      totalEmailsSent:
+        (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(
+          (s) => s.emailStatus === "sent"
+        ).length || 0),
+      totalEmailsFailed:
+        (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(
+          (s) => s.emailStatus === "failed"
+        ).length || 0),
+      totalEmailsOpened:
+        (order.emailTracking?.confirmation?.opened ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter((s) => s.opened).length ||
+          0),
+      totalEmailsClicked:
+        (order.emailTracking?.confirmation?.clicked ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter((s) => s.clicked).length ||
+          0),
       lastEmailSent: getLastEmailSent(order.emailTracking),
     },
   };
 
   return res
     .status(200)
-    .json(new ApiResponse(200, emailStatus, "Email status retrieved successfully", true));
+    .json(
+      new ApiResponse(
+        200,
+        emailStatus,
+        "Email status retrieved successfully",
+        true
+      )
+    );
 });
 
 /**
@@ -1597,19 +1689,19 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
  */
 function getLastEmailSent(emailTracking) {
   const dates = [];
-  
+
   if (emailTracking?.confirmation?.sentAt) {
     dates.push(new Date(emailTracking.confirmation.sentAt));
   }
-  
+
   if (emailTracking?.statusUpdates) {
-    emailTracking.statusUpdates.forEach(update => {
+    emailTracking.statusUpdates.forEach((update) => {
       if (update.sentAt) {
         dates.push(new Date(update.sentAt));
       }
     });
   }
-  
+
   return dates.length > 0 ? new Date(Math.max(...dates)) : null;
 }
 
