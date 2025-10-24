@@ -296,8 +296,6 @@ const createOrder = asyncHandler(async (req, res) => {
         html: htmlContent,
       };
 
-      console.log(emailOptions, "emailOptions");
-
       const emailSent = await sendEmail(emailOptions);
       console.log(
         "✅ Status update email sent successfully:",
