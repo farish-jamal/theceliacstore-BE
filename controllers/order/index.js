@@ -22,6 +22,7 @@ const {
   generateCompanyOrderNotification,
 } = require("../../utils/email/templates/orderConfirmation");
 const Admin = require("../../models/adminModel");
+const User = require("../../models/userModel");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -678,60 +679,6 @@ const editOrder = asyncHandler(async (req, res) => {
     attempts: 0,
   };
   await order.save();
-
-  // Send email asynchronously (non-blocking)
-  setImmediate(async () => {
-    try {
-      // Send customer email
-      const customerHtmlContent = generateCustomerOrderConfirmation(order, user);
-      const customerEmailOptions = {
-        to: user.email,
-        subject: `Order Updated - ${order._id}`,
-        html: customerHtmlContent,
-      };
-
-      const customerEmailSent = await sendEmail(customerEmailOptions);
-
-      if (customerEmailSent.success) {
-        console.log("✅ Order edit confirmation email sent successfully to customer");
-        // Update email tracking status
-        order.emailTracking.orderEdit.emailStatus = "sent";
-        order.emailTracking.orderEdit.sentAt = new Date();
-        await order.save();
-      }
-
-      // Send admin email
-      const admins = await Admin.find({ 
-        role: { $in: ["super_admin", "admin"] } 
-      }).select("email");
-      
-      const adminEmails = admins.map(admin => admin.email).filter(Boolean);
-      
-      if (adminEmails.length > 0) {
-        const adminHtmlContent = generateCompanyOrderNotification(order, user);
-        const adminEmailOptions = {
-          to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
-          subject: `🛒 Order Updated - Order #${order._id}`,
-          html: adminHtmlContent,
-        };
-
-        const adminEmailSent = await sendEmail(adminEmailOptions);
-        
-        if (adminEmailSent.success) {
-          console.log("✅ Order edit notification sent successfully to admin");
-        } else {
-          console.error("❌ Failed to send order edit notification to admin");
-        }
-      }
-    } catch (error) {
-      console.error("❌ Failed to send order edit confirmation email:", error.message);
-      // Update email tracking status
-      order.emailTracking.orderEdit.emailStatus = "failed";
-      order.emailTracking.orderEdit.failedAt = new Date();
-      order.emailTracking.orderEdit.error = error.message;
-      await order.save();
-    }
-  });
 
   return res
     .status(200)
@@ -1493,6 +1440,68 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
 
     await order.save();
+
+
+    (async () => {
+      try {
+        // Send customer email
+        const user = await User.findById(order.user);
+        const customerHtmlContent = generateCustomerOrderConfirmation(
+          order.toObject(),
+          user.toObject()
+        );
+  
+        const customerEmailOptions = {
+          to: user.email,
+          subject: `Order Updated - ${order._id}`,
+          html: customerHtmlContent,
+        };
+  
+        const customerEmailSent = await sendEmail(customerEmailOptions);
+        
+        if (customerEmailSent.success) {
+          console.log("✅ Order updated email sent successfully to customer");
+          // Update email tracking status
+          order.emailTracking.confirmation.status = "sent";
+          order.emailTracking.confirmation.sentAt = new Date();
+          await order.save();
+        }
+  
+        // Send admin email
+        const admins = await Admin.find({ 
+          role: { $in: ["super_admin", "admin"] } 
+        }).select("email");
+        
+        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+        
+        if (adminEmails.length > 0) {
+          const adminHtmlContent = generateCompanyOrderNotification(
+            order.toObject(),
+            user.toObject()
+          );
+          const adminEmailOptions = {
+            to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
+            subject: `🛒 Order Updated - Order #${order._id}`,
+            html: adminHtmlContent,
+          };
+  
+          const adminEmailSent = await sendEmail(adminEmailOptions);
+          
+          if (adminEmailSent.success) {
+            console.log("✅ Order updated notification sent successfully to admin");
+          } else {
+            console.error("❌ Failed to send order updated notification to admin");
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed to send order updated email:", error.message);
+        // Update email tracking status
+        order.emailTracking.confirmation.status = "failed";
+        order.emailTracking.confirmation.failedAt = new Date();
+        order.emailTracking.confirmation.error = error.message;
+        await order.save();
+      }
+    })();
 
     return res
       .status(200)
