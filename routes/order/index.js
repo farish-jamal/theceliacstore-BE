@@ -22,6 +22,6 @@ router.patch("/edit/:id", user, OrderController.editOrder);
 router.get("/:id", adminOrSuperAdmin, OrderController.getOrderById);
 router.get("/user/:id", user, OrderController.getOrderByIdFormUser);
 // router.get("/generate-order-bill/:id", user, OrderController.generateOrderBill);
-router.post("/generate-payment-link", user, OrderController.generatePaymentLinks);
+router.post("/generate-payment-link", adminOrSuperAdmin, OrderController.generatePaymentLinks);
 
 module.exports = router;
