@@ -12,12 +12,11 @@ const {
   calculateShippingCost,
   calculateShippingByZone,
 } = require("../../utils/shipping/calculateShipping");
-// const emailQueue = require("../../queues/emailQueue"); // Commented out - using direct email service
 const {
   sendOrderConfirmationEmails,
   sendStatusUpdateEmails,
 } = require("../../utils/email/directEmailService");
-const { sendEmail } = require("../../config/email");
+const { sendEmail } = require("../../utils/email/emailService");
 const {
   generateCustomerOrderConfirmation,
 } = require("../../utils/email/templates/orderConfirmation");
@@ -306,14 +305,6 @@ const createOrder = asyncHandler(async (req, res) => {
     }
   })();
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("order-confirmation", {
-  //   type: "order-confirmation",
-  //   data: {
-  //     order: order.toObject(),
-  //     user: user.toObject(),
-  //   },
-  // });
 
   return res
     .status(201)
@@ -425,16 +416,6 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     }
   });
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("status-update", {
-  //   type: "status-update",
-  //   data: {
-  //     order: order.toObject(),
-  //     user: user.toObject(),
-  //     previousStatus,
-  //     updatedBy: req.admin ? req.admin.toObject() : null,
-  //   },
-  // });
 
   return res
     .status(200)

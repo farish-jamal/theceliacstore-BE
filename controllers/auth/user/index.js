@@ -2,7 +2,6 @@ const { asyncHandler } = require("../../../common/asyncHandler");
 const User = require("../../../models/userModel");
 const ApiResponse = require("../../../utils/ApiResponse");
 const { generateAccessToken } = require("../../../utils/auth");
-// const emailQueue = require("../../../queues/emailQueue"); // Commented out - using direct email service
 const { sendWelcomeEmail, sendForgotPasswordEmail } = require("../../../utils/email/directEmailService");
 const crypto = require("crypto");
 
@@ -70,13 +69,6 @@ const registerUser = asyncHandler(async (req, res) => {
     }
   });
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("welcome", {
-  //   type: "welcome",
-  //   data: {
-  //     user: user.toObject(),
-  //   },
-  // });
 
   const data = {
     id: user.id,
@@ -206,14 +198,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
   });
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("forgot-password", {
-  //   type: "forgot-password",
-  //   data: {
-  //     user: user.toObject(),
-  //     newPassword: newPassword, // Send plain password in email (only once)
-  //   },
-  // });
 
   console.log(`[Forgot Password] Email queued for: ${user.email}`);
 

@@ -30,8 +30,6 @@ const emailRoutes = require("./routes/email/index.js");
 // Connect DB
 connectDB();
 
-// Start email worker
-// require("./workers/emailWorker");
 
 const app = express();
 
