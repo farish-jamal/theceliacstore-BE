@@ -282,24 +282,26 @@ const createOrder = asyncHandler(async (req, res) => {
   await order.save();
 
   // Send emails asynchronously (non-blocking)
-  setImmediate(async () => {
-    try {
-      const htmlContent = generateCustomerOrderConfirmation(
-        order.toObject(),
-        user.toObject()
-      );
-      const emailOptions = {
-        from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: `Order Received - ${order._id}`,
-        html: htmlContent,
-      };
-      const emailSent = await sendEmail(emailOptions);
-      console.log("✅ Status update email sent:", emailSent.messageId);
-    } catch (error) {
-      console.error("❌ Failed to send status update email:", error.message);
-    }
-  });
+(async () => {
+  try {
+    const htmlContent = generateCustomerOrderConfirmation(
+      order.toObject(),
+      user.toObject()
+    );
+
+    const emailOptions = {
+      from: `"Petcaart 🐾" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: `Order Received - ${order._id}`,
+      html: htmlContent,
+    };
+
+    const emailSent = await sendEmail(emailOptions);
+    console.log("✅ Status update email sent successfully:", emailSent.messageId);
+  } catch (error) {
+    console.error("❌ Failed to send status update email:", error.message);
+  }
+})();
 
   // Commented out Redis queue usage - keeping for future use
   // await emailQueue.add("order-confirmation", {
