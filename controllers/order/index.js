@@ -1833,12 +1833,12 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
         .json(new ApiResponse(404, null, "Order not found", false));
     }
 
-    // Check if payment link already exists
-    if (order.paymentLink) {
-      return res
-        .status(400)
-        .json(new ApiResponse(400, null, "Payment link already exists for this order", false));
-    }
+    // // Check if payment link already exists
+    // if (order.paymentLink) {
+    //   return res
+    //     .status(400)
+    //     .json(new ApiResponse(400, null, "Payment link already exists for this order", false));
+    // }
 
     // Convert amount to paise (Razorpay expects amount in smallest currency unit)
     const amountInPaise = Math.round(numericAmount * 100);
@@ -1857,9 +1857,7 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
         sms: true,
         email: true
       },
-      reminder_enable: true,
-      callback_url: `${process.env.APP_URL}/payment/callback`,
-      callback_method: 'get'
+      reminder_enable: true
     };
 
     const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
@@ -1894,6 +1892,89 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
   }
 });
 
+const handlePaymentWebhook = asyncHandler(async (req, res) => {
+  const crypto = require('crypto');
+  
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const body = JSON.stringify(req.body);
+    
+    // Verify webhook signature
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(body)
+      .digest('hex');
+    
+    if (signature !== expectedSignature) {
+      console.error('Webhook signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+    
+    const event = req.body;
+    console.log('Received webhook event:', event.event);
+    
+    // Handle payment captured event
+    if (event.event === 'payment.captured') {
+      const payment = event.payload.payment.entity;
+      const paymentLink = event.payload.payment_link?.entity;
+      
+      if (paymentLink) {
+        // Find order by payment link ID
+        const order = await Order.findOne({ paymentLinkId: paymentLink.id });
+        
+        if (order) {
+          // Verify payment amount matches order amount
+          const orderAmountInPaise = Math.round(parseFloat(order.finalTotalAmount.toString()) * 100);
+          
+          if (payment.amount === orderAmountInPaise && payment.status === 'captured') {
+            // Update order with payment details
+            order.paymentStatus = 'paid';
+            order.paymentId = payment.id;
+            order.paymentMethod = payment.method;
+            order.paidAt = new Date();
+            
+            // Update order status to confirmed if it's still pending
+            if (order.status === 'pending') {
+              order.status = 'confirmed';
+            }
+            
+            await order.save();
+            
+            console.log(`Payment captured for order ${order._id}, payment ID: ${payment.id}`);
+          } else {
+            console.error(`Payment amount mismatch for order ${order._id}. Expected: ${orderAmountInPaise}, Received: ${payment.amount}`);
+          }
+        } else {
+          console.error(`Order not found for payment link ID: ${paymentLink.id}`);
+        }
+      }
+    }
+    
+    // Handle payment failed event
+    if (event.event === 'payment.failed') {
+      const payment = event.payload.payment.entity;
+      const paymentLink = event.payload.payment_link?.entity;
+      
+      if (paymentLink) {
+        const order = await Order.findOne({ paymentLinkId: paymentLink.id });
+        
+        if (order) {
+          order.paymentStatus = 'failed';
+          await order.save();
+          
+          console.log(`Payment failed for order ${order._id}, payment ID: ${payment.id}`);
+        }
+      }
+    }
+    
+    res.status(200).json({ status: 'success' });
+    
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
 module.exports = {
   createOrder,
   getOrderHistory,
@@ -1907,4 +1988,5 @@ module.exports = {
   getOrderByIdFormUser,
   getOrderEmailStatus,
   generatePaymentLinks,
+  handlePaymentWebhook,
 };

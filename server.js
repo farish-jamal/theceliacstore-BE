@@ -26,6 +26,7 @@ const dashboardRoutes = require("./routes/dashboard/index.js");
 const deliveryZoneRoutes = require("./routes/delivery_zone/index.js");
 const emailTrackingRoutes = require("./routes/email_tracking/index.js");
 const emailRoutes = require("./routes/email/index.js");
+const webhookRoutes = require("./routes/webhook/index.js");
 
 // Connect DB
 connectDB();
@@ -63,6 +64,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/delivery-zone", deliveryZoneRoutes);
 app.use("/api/email-tracking", emailTrackingRoutes);
 app.use("/api/email", emailRoutes);
+app.use("/api/webhook", webhookRoutes);
 
 app.use("/api-doc", swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
