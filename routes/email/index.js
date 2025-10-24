@@ -18,13 +18,13 @@ router.post("/send-custom", sendCustomEmailManual);
 router.post("/send-test", sendTestEmail);
 
 // Resend order confirmation email
-router.post("/resend-order-confirmation/:orderId", resendOrderConfirmation);
+router.post("/resend-order-confirmation", resendOrderConfirmation);
 
 // Resend status update email
-router.post("/resend-status-update/:orderId/:status", resendStatusUpdate);
+router.post("/resend-status-update", resendStatusUpdate);
 
 // Resend welcome email
-router.post("/resend-welcome/:userId", resendWelcomeEmail);
+router.post("/resend-welcome", resendWelcomeEmail);
 
 // Get failed emails for manual resending
 router.get("/failed-emails", getFailedEmails);

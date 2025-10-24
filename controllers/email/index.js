@@ -68,7 +68,13 @@ const sendCustomEmailManual = asyncHandler(async (req, res) => {
  * Resend order confirmation email manually
  */
 const resendOrderConfirmation = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
+  const { orderId } = req.body;
+
+  if (!orderId) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "orderId is required", false));
+  }
 
   if (!mongoose.Types.ObjectId.isValid(orderId)) {
     return res
@@ -125,7 +131,13 @@ const resendOrderConfirmation = asyncHandler(async (req, res) => {
  * Resend status update email manually
  */
 const resendStatusUpdate = asyncHandler(async (req, res) => {
-  const { orderId, status } = req.params;
+  const { orderId, status } = req.body;
+
+  if (!orderId || !status) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "orderId and status are required", false));
+  }
 
   if (!mongoose.Types.ObjectId.isValid(orderId)) {
     return res
@@ -148,22 +160,40 @@ const resendStatusUpdate = asyncHandler(async (req, res) => {
         .json(new ApiResponse(404, null, "User not found", false));
     }
 
-    // Find the specific status update entry
-    const statusUpdate = order.emailTracking?.statusUpdates?.find(
-      (update) => update.status === status
-    );
-
-    if (!statusUpdate) {
+    // Check if the order has the requested status
+    if (order.status !== status) {
       return res
-        .status(404)
+        .status(400)
         .json(
           new ApiResponse(
-            404,
+            400,
             null,
-            `Status update for ${status} not found`,
+            `Order status is ${order.status}, not ${status}. Cannot resend status update email.`,
             false
           )
         );
+    }
+
+    // Find the specific status update entry or create one if it doesn't exist
+    let statusUpdate = order.emailTracking?.statusUpdates?.find(
+      (update) => update.status === status
+    );
+
+    // If status update entry doesn't exist, create one
+    if (!statusUpdate) {
+      if (!order.emailTracking) {
+        order.emailTracking = { confirmation: {}, statusUpdates: [] };
+      }
+      
+      statusUpdate = {
+        status: status,
+        emailStatus: "queued",
+        queuedAt: new Date(),
+        attempts: 0
+      };
+      
+      order.emailTracking.statusUpdates.push(statusUpdate);
+      await order.save();
     }
 
     await sendStatusUpdateEmails({
@@ -202,7 +232,13 @@ const resendStatusUpdate = asyncHandler(async (req, res) => {
  * Resend welcome email manually
  */
 const resendWelcomeEmail = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "userId is required", false));
+  }
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     return res
