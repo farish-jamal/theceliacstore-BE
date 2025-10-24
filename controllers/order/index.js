@@ -20,6 +20,8 @@ const { sendEmail } = require("../../utils/email/emailService");
 const {
   generateCustomerOrderConfirmation,
   generateCompanyOrderNotification,
+  generateCustomerOrderUpdate,
+  generateCompanyOrderUpdate,
 } = require("../../utils/email/templates/orderConfirmation");
 const Admin = require("../../models/adminModel");
 
@@ -1445,7 +1447,7 @@ const updateOrder = asyncHandler(async (req, res) => {
       try {
         // Send customer email
         const user = await User.findById(order.user);
-        const customerHtmlContent = generateCustomerOrderConfirmation(
+        const customerHtmlContent = generateCustomerOrderUpdate(
           order.toObject(),
           user.toObject()
         );
@@ -1474,7 +1476,7 @@ const updateOrder = asyncHandler(async (req, res) => {
         const adminEmails = admins.map(admin => admin.email).filter(Boolean);
         
         if (adminEmails.length > 0) {
-          const adminHtmlContent = generateCompanyOrderNotification(
+          const adminHtmlContent = generateCompanyOrderUpdate(
             order.toObject(),
             user.toObject()
           );
