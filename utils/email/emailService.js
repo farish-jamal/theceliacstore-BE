@@ -1,19 +1,11 @@
-const nodemailer = require("nodemailer");
-const emailConfig = require("../../config/email");
+const { sendEmail: sendEmailViaBrevo } = require("../../config/email");
 
 /**
- * Create reusable transporter
+ * Create reusable transporter (deprecated - using Brevo API instead)
  */
 const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: emailConfig.host,
-    port: emailConfig.port,
-    secure: emailConfig.secure,
-    auth: {
-      user: emailConfig.auth.user,
-      pass: emailConfig.auth.pass,
-    },
-  });
+  // This function is kept for backward compatibility but not used
+  return null;
 };
 
 /**
@@ -26,58 +18,53 @@ const createTransporter = () => {
  * @returns {Promise}
  */
 const sendEmail = async (options) => {
-  console.log("\n📧 ========== EMAIL SEND ATTEMPT ==========");
+  console.log("\n📧 ========== EMAIL SEND ATTEMPT (BREVO API) ==========");
   console.log("📤 To:", options.to);
   console.log("📝 Subject:", options.subject);
   console.log("⏰ Time:", new Date().toISOString());
   
   try {
-    console.log("🔧 Creating transporter...");
+    console.log("🔧 Using Brevo API...");
     
-    // Check if email config is properly set
-    if (!emailConfig.auth.user || !emailConfig.auth.pass) {
-      console.error("❌ Email configuration missing - USER or PASSWORD not set");
+    // Check if Brevo API key is set
+    if (!process.env.BREVO_API_KEY) {
+      console.error("❌ Brevo API key not set");
       return {
         success: false,
-        error: "Email configuration missing - USER or PASSWORD not set",
+        error: "Brevo API key not configured",
       };
     }
     
-    if (!emailConfig.from.email) {
-      console.error("❌ Email configuration missing - FROM EMAIL not set");
+    if (!process.env.EMAIL_FROM_EMAIL) {
+      console.error("❌ Email FROM address not set");
       return {
         success: false,
-        error: "Email configuration missing - FROM EMAIL not set",
+        error: "Email FROM address not configured",
       };
     }
-    
-    const transporter = createTransporter();
 
-    const mailOptions = {
-      from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
-      to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+    const emailOptions = {
+      from: process.env.EMAIL_FROM_EMAIL,
+      fromName: process.env.EMAIL_FROM_NAME || "Celiac Store",
+      to: Array.isArray(options.to) ? options.to[0] : options.to, // Brevo API handles single recipient
       subject: options.subject,
       html: options.html,
-      text: options.text || "", // Fallback to empty string if no text provided
     };
 
-    console.log("📨 From:", mailOptions.from);
-    console.log("🔌 SMTP Host:", emailConfig.host);
-    console.log("🔌 SMTP Port:", emailConfig.port);
-    console.log("👤 SMTP User:", emailConfig.auth.user);
-    console.log("🚀 Sending email...");
+    console.log("📨 From:", emailOptions.from);
+    console.log("📨 From Name:", emailOptions.fromName);
+    console.log("🚀 Sending via Brevo API...");
 
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
+    // Send email via Brevo API
+    const response = await sendEmailViaBrevo(emailOptions);
     
     console.log("✅ EMAIL SENT SUCCESSFULLY!");
-    console.log("📬 Message ID:", info.messageId);
-    console.log("📊 Response:", info.response);
+    console.log("📬 Message ID:", response.messageId);
     console.log("=========================================\n");
 
     return {
       success: true,
-      messageId: info.messageId,
+      messageId: response.messageId,
     };
   } catch (error) {
     console.error("❌ ========== EMAIL SEND FAILED ==========");
@@ -101,6 +88,9 @@ const sendEmail = async (options) => {
  * @returns {Promise}
  */
 const sendBulkEmail = async (recipients, subject, html) => {
+  console.log(`📮 Sending bulk email to ${recipients.length} recipients via Brevo API`);
+  
+  // Send individual emails since Brevo API handles one recipient at a time
   const promises = recipients.map((recipient) =>
     sendEmail({ to: recipient, subject, html })
   );

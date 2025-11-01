@@ -8,9 +8,23 @@ const Order = require("../../models/orderModel");
 const Category = require("../../models/categoryModel");
 const Bundle = require("../../models/bundleModel");
 const User = require("../../models/userModel");
-const { calculateShippingCost, calculateShippingByZone } = require("../../utils/shipping/calculateShipping");
-// const emailQueue = require("../../queues/emailQueue"); // Commented out - using direct email service
-const { sendOrderConfirmationEmails, sendStatusUpdateEmails } = require("../../utils/email/directEmailService");
+const {
+  calculateShippingCost,
+  calculateShippingByZone,
+} = require("../../utils/shipping/calculateShipping");
+const {
+  sendOrderConfirmationEmails,
+  sendStatusUpdateEmails,
+} = require("../../utils/email/directEmailService");
+const { sendEmail } = require("../../utils/email/emailService");
+const {
+  generateCustomerOrderConfirmation,
+  generateCompanyOrderNotification,
+  generateCustomerOrderUpdate,
+  generateCompanyOrderUpdate,
+} = require("../../utils/email/templates/orderConfirmation");
+const Admin = require("../../models/adminModel");
+const razorpay = require("../../config/razorpay");
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -161,12 +175,12 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
-      
+
       // Calculate weight for shipping
       if (product.weight_in_grams) {
         totalWeightGrams += product.weight_in_grams * cartItem.quantity;
       }
-      
+
       orderItems.push({
         type: "product",
         product: {
@@ -192,17 +206,20 @@ const createOrder = asyncHandler(async (req, res) => {
       const discountedItemTotal = discountedPrice * cartItem.quantity;
       totalAmount += itemTotal;
       discountedTotalAmount += discountedItemTotal;
-      
+
       // Calculate weight for bundles - sum up all products in the bundle
       if (bundle.products && Array.isArray(bundle.products)) {
         for (const bundleProduct of bundle.products) {
           const product = await Product.findById(bundleProduct.product);
           if (product && product.weight_in_grams) {
-            totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * cartItem.quantity;
+            totalWeightGrams +=
+              product.weight_in_grams *
+              bundleProduct.quantity *
+              cartItem.quantity;
           }
         }
       }
-      
+
       orderItems.push({
         type: "bundle",
         bundle: {
@@ -256,38 +273,79 @@ const createOrder = asyncHandler(async (req, res) => {
 
   // Send order confirmation emails directly (async - won't block response)
   const user = await User.findById(userId);
-  
+
   // Mark email as queued initially
   order.emailTracking = {
     confirmation: {
       status: "queued",
       queuedAt: new Date(),
-      attempts: 0
+      attempts: 0,
     },
-    statusUpdates: []
+    statusUpdates: [],
   };
   await order.save();
-  
-  // Send emails asynchronously (non-blocking)
-  setImmediate(async () => {
-    try {
-      await sendOrderConfirmationEmails({
-        order: order.toObject(),
-        user: user.toObject(),
-      });
-    } catch (error) {
-      console.error("❌ Failed to send order confirmation emails:", error.message);
-    }
-  });
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("order-confirmation", {
-  //   type: "order-confirmation",
-  //   data: {
-  //     order: order.toObject(),
-  //     user: user.toObject(),
-  //   },
-  // });
+  // Send emails asynchronously (non-blocking)
+  (async () => {
+    try {
+      // Send customer email
+      const customerHtmlContent = generateCustomerOrderConfirmation(
+        order.toObject(),
+        user.toObject()
+      );
+
+      const customerEmailOptions = {
+        to: user.email,
+        subject: `Order Received - ${order._id}`,
+        html: customerHtmlContent,
+      };
+
+      const customerEmailSent = await sendEmail(customerEmailOptions);
+      
+      if (customerEmailSent.success) {
+        console.log("✅ Order confirmation email sent successfully to customer");
+        // Update email tracking status
+        order.emailTracking.confirmation.status = "sent";
+        order.emailTracking.confirmation.sentAt = new Date();
+        await order.save();
+      }
+
+      // Send admin email
+      const admins = await Admin.find({ 
+        role: { $in: ["super_admin", "admin"] } 
+      }).select("email");
+      
+      const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+      
+      if (adminEmails.length > 0) {
+        const adminHtmlContent = generateCompanyOrderNotification(
+          order.toObject(),
+          user.toObject()
+        );
+        const adminEmailOptions = {
+          to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
+          subject: `🛒 New Order Received - Order #${order._id}`,
+          html: adminHtmlContent,
+        };
+
+        const adminEmailSent = await sendEmail(adminEmailOptions);
+        
+        if (adminEmailSent.success) {
+          console.log("✅ New order notification sent successfully to admin");
+        } else {
+          console.error("❌ Failed to send new order notification to admin");
+        }
+      }
+    } catch (error) {
+      console.error("❌ Failed to send order confirmation email:", error.message);
+      // Update email tracking status
+      order.emailTracking.confirmation.status = "failed";
+      order.emailTracking.confirmation.failedAt = new Date();
+      order.emailTracking.confirmation.error = error.message;
+      await order.save();
+    }
+  })();
+
 
   return res
     .status(201)
@@ -363,7 +421,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   // Send status update emails directly (async - won't block response)
   const user = await User.findById(order.user);
-  
+
   // Add status update email tracking entry as queued
   if (!order.emailTracking) {
     order.emailTracking = { confirmation: {}, statusUpdates: [] };
@@ -372,34 +430,32 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     status: order.status,
     emailStatus: "queued",
     queuedAt: new Date(),
-    attempts: 0
+    attempts: 0,
   });
   await order.save();
-  
+
   // Send emails asynchronously (non-blocking)
+
+  console.log(user, "user");
   setImmediate(async () => {
     try {
-      await sendStatusUpdateEmails({
-        order: order.toObject(),
-        user: user.toObject(),
-        previousStatus,
-        updatedBy: req.admin ? req.admin.toObject() : null,
-      });
+      const htmlContent = generateCustomerOrderConfirmation(order, user);
+      const emailOptions = {
+        to: user.email,
+        subject: `Order Received - ${order._id}`,
+        html: htmlContent,
+      };
+
+      const emailSent = await sendEmail(emailOptions);
+
+      if (emailSent.accepted.length > 0) {
+        console.log("✅ Status update email sent successfully:", emailSent);
+      }
     } catch (error) {
       console.error("❌ Failed to send status update emails:", error.message);
     }
   });
 
-  // Commented out Redis queue usage - keeping for future use
-  // await emailQueue.add("status-update", {
-  //   type: "status-update",
-  //   data: {
-  //     order: order.toObject(),
-  //     user: user.toObject(),
-  //     previousStatus,
-  //     updatedBy: req.admin ? req.admin.toObject() : null,
-  //   },
-  // });
 
   return res
     .status(200)
@@ -643,12 +699,12 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
-        
+
         // Calculate weight for shipping
         if (product.weight_in_grams) {
           totalWeightGrams += product.weight_in_grams * item.quantity;
         }
-        
+
         orderItems.push({
           type: "product",
           product: {
@@ -674,17 +730,20 @@ const editOrder = asyncHandler(async (req, res) => {
         const discountedItemTotal = discountedPrice * item.quantity;
         totalAmount += itemTotal;
         discountedTotalAmount += discountedItemTotal;
-        
+
         // Calculate weight for bundles
         if (bundle.products && Array.isArray(bundle.products)) {
           for (const bundleProduct of bundle.products) {
             const product = await Product.findById(bundleProduct.product);
             if (product && product.weight_in_grams) {
-              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              totalWeightGrams +=
+                product.weight_in_grams *
+                bundleProduct.quantity *
+                item.quantity;
             }
           }
         }
-        
+
         orderItems.push({
           type: "bundle",
           bundle: {
@@ -722,7 +781,10 @@ const editOrder = asyncHandler(async (req, res) => {
           for (const bundleProduct of bundle.products) {
             const product = await Product.findById(bundleProduct.product);
             if (product && product.weight_in_grams) {
-              totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+              totalWeightGrams +=
+                product.weight_in_grams *
+                bundleProduct.quantity *
+                item.quantity;
             }
           }
         }
@@ -730,9 +792,9 @@ const editOrder = asyncHandler(async (req, res) => {
     }
     discountedTotalAmount = parseFloat(order.discountedTotalAmount.toString());
   }
-  
+
   order.address = addressSnapshot;
-  
+
   // Recalculate shipping if address or items changed
   if (newAddress || orderItems.length > 0) {
     const pincode = newAddress ? newAddress.pincode : order.address.pincode;
@@ -744,7 +806,21 @@ const editOrder = asyncHandler(async (req, res) => {
     order.shippingDetails = shippingDetails;
     order.finalTotalAmount = discountedTotalAmount + shippingCost;
   }
-  
+
+  await order.save();
+
+  // Send order edit confirmation email (async - won't block response)
+  const user = await User.findById(order.user);
+
+  // Add email tracking entry for order edit
+  if (!order.emailTracking) {
+    order.emailTracking = { confirmation: {}, statusUpdates: [] };
+  }
+  order.emailTracking.orderEdit = {
+    emailStatus: "queued",
+    queuedAt: new Date(),
+    attempts: 0,
+  };
   await order.save();
 
   return res
@@ -1096,7 +1172,9 @@ const updateOrder = asyncHandler(async (req, res) => {
             sub_category: product.sub_category,
           },
           quantity: qty,
-          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          total_amount: mongoose.Types.Decimal128.fromString(
+            itemTotal.toString()
+          ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
             discountedItemTotal.toString()
           ),
@@ -1222,12 +1300,7 @@ const updateOrder = asyncHandler(async (req, res) => {
           return res
             .status(400)
             .json(
-              new ApiResponse(
-                400,
-                null,
-                `Bundle ${bundleId} not found`,
-                false
-              )
+              new ApiResponse(400, null, `Bundle ${bundleId} not found`, false)
             );
         }
 
@@ -1251,7 +1324,9 @@ const updateOrder = asyncHandler(async (req, res) => {
             products: bundle.products,
           },
           quantity: qty,
-          total_amount: mongoose.Types.Decimal128.fromString(itemTotal.toString()),
+          total_amount: mongoose.Types.Decimal128.fromString(
+            itemTotal.toString()
+          ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
             discountedItemTotal.toString()
           ),
@@ -1335,7 +1410,12 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
 
     // Recalculate totals after item updates
-    if (updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
+    if (
+      updateData.products ||
+      updateData.bundles ||
+      updateData.addProducts ||
+      updateData.addBundles
+    ) {
       let totalAmount = 0;
       let discountedTotalAmount = 0;
 
@@ -1358,21 +1438,28 @@ const updateOrder = asyncHandler(async (req, res) => {
     // 1. Manual override (updateData.shippingCost)
     // 2. Recalculate by specific delivery zone (updateData.deliveryZoneId)
     // 3. Auto-recalculate if address or items changed
-    
+
     let shippingUpdated = false;
     let newShippingCost = 0;
     let newShippingDetails = null;
-    
+
     // Option 1: Manual shipping cost override
     if (updateData.shippingCost !== undefined) {
       newShippingCost = parseFloat(updateData.shippingCost);
-      
+
       if (newShippingCost < 0) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, "Shipping cost cannot be negative", false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              "Shipping cost cannot be negative",
+              false
+            )
+          );
       }
-      
+
       // Keep existing shipping details but mark as manual override
       newShippingDetails = order.shippingDetails || {
         deliveryZoneId: null,
@@ -1388,7 +1475,7 @@ const updateOrder = asyncHandler(async (req, res) => {
     // Option 2: Recalculate by specific delivery zone
     else if (updateData.deliveryZoneId) {
       let totalWeightGrams = 0;
-      
+
       // Calculate total weight from current order items
       for (const item of order.items) {
         if (item.type === "product" && item.product) {
@@ -1402,18 +1489,21 @@ const updateOrder = asyncHandler(async (req, res) => {
             for (const bundleProduct of bundle.products) {
               const product = await Product.findById(bundleProduct.product);
               if (product && product.weight_in_grams) {
-                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+                totalWeightGrams +=
+                  product.weight_in_grams *
+                  bundleProduct.quantity *
+                  item.quantity;
               }
             }
           }
         }
       }
-      
+
       const result = await calculateShippingByZone(
         updateData.deliveryZoneId,
         totalWeightGrams
       );
-      
+
       if (result.shippingDetails) {
         newShippingCost = result.shippingCost;
         newShippingDetails = result.shippingDetails;
@@ -1421,13 +1511,26 @@ const updateOrder = asyncHandler(async (req, res) => {
       } else {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, "Invalid or inactive delivery zone", false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              "Invalid or inactive delivery zone",
+              false
+            )
+          );
       }
     }
     // Option 3: Auto-recalculate if address or items changed
-    else if (updateData.addressId || updateData.products || updateData.bundles || updateData.addProducts || updateData.addBundles) {
+    else if (
+      updateData.addressId ||
+      updateData.products ||
+      updateData.bundles ||
+      updateData.addProducts ||
+      updateData.addBundles
+    ) {
       let totalWeightGrams = 0;
-      
+
       // Calculate total weight from current order items
       for (const item of order.items) {
         if (item.type === "product" && item.product) {
@@ -1441,32 +1544,34 @@ const updateOrder = asyncHandler(async (req, res) => {
             for (const bundleProduct of bundle.products) {
               const product = await Product.findById(bundleProduct.product);
               if (product && product.weight_in_grams) {
-                totalWeightGrams += product.weight_in_grams * bundleProduct.quantity * item.quantity;
+                totalWeightGrams +=
+                  product.weight_in_grams *
+                  bundleProduct.quantity *
+                  item.quantity;
               }
             }
           }
         }
       }
-      
+
       // Recalculate shipping based on new weight and/or address
       const pincode = order.address.pincode;
-      const result = await calculateShippingCost(
-        pincode,
-        totalWeightGrams
-      );
-      
+      const result = await calculateShippingCost(pincode, totalWeightGrams);
+
       newShippingCost = result.shippingCost;
       newShippingDetails = result.shippingDetails;
       shippingUpdated = true;
     }
-    
+
     // Update shipping if any of the above conditions triggered
     if (shippingUpdated) {
       order.shippingCost = newShippingCost;
       order.shippingDetails = newShippingDetails;
-      
+
       // Recalculate final total
-      const discountedTotal = parseFloat(order.discountedTotalAmount.toString());
+      const discountedTotal = parseFloat(
+        order.discountedTotalAmount.toString()
+      );
       order.finalTotalAmount = mongoose.Types.Decimal128.fromString(
         (discountedTotal + newShippingCost).toString()
       );
@@ -1478,6 +1583,68 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
 
     await order.save();
+
+
+    (async () => {
+      try {
+        // Send customer email
+        const user = await User.findById(order.user);
+        const customerHtmlContent = generateCustomerOrderUpdate(
+          order.toObject(),
+          user.toObject()
+        );
+  
+        const customerEmailOptions = {
+          to: user.email,
+          subject: `Order Updated - ${order._id}`,
+          html: customerHtmlContent,
+        };
+  
+        const customerEmailSent = await sendEmail(customerEmailOptions);
+        
+        if (customerEmailSent.success) {
+          console.log("✅ Order updated email sent successfully to customer");
+          // Update email tracking status
+          order.emailTracking.confirmation.status = "sent";
+          order.emailTracking.confirmation.sentAt = new Date();
+          await order.save();
+        }
+  
+        // Send admin email
+        const admins = await Admin.find({ 
+          role: { $in: ["super_admin", "admin"] } 
+        }).select("email");
+        
+        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+        
+        if (adminEmails.length > 0) {
+          const adminHtmlContent = generateCompanyOrderUpdate(
+            order.toObject(),
+            user.toObject()
+          );
+          const adminEmailOptions = {
+            to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
+            subject: `🛒 Order Updated - Order #${order._id}`,
+            html: adminHtmlContent,
+          };
+  
+          const adminEmailSent = await sendEmail(adminEmailOptions);
+          
+          if (adminEmailSent.success) {
+            console.log("✅ Order updated notification sent successfully to admin");
+          } else {
+            console.error("❌ Failed to send order updated notification to admin");
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed to send order updated email:", error.message);
+        // Update email tracking status
+        order.emailTracking.confirmation.status = "failed";
+        order.emailTracking.confirmation.failedAt = new Date();
+        order.emailTracking.confirmation.error = error.message;
+        await order.save();
+      }
+    })();
 
     return res
       .status(200)
@@ -1684,8 +1851,10 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
       .json(new ApiResponse(400, null, "Invalid order ID", false));
   }
 
-  const order = await Order.findById(id).select("_id emailTracking createdAt status");
-  
+  const order = await Order.findById(id).select(
+    "_id emailTracking createdAt status"
+  );
+
   if (!order) {
     return res
       .status(404)
@@ -1716,21 +1885,38 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
     },
     statusUpdates: order.emailTracking?.statusUpdates || [],
     summary: {
-      totalEmailsSent: (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) + 
-        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "sent").length || 0),
-      totalEmailsFailed: (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) + 
-        (order.emailTracking?.statusUpdates?.filter(s => s.emailStatus === "failed").length || 0),
-      totalEmailsOpened: (order.emailTracking?.confirmation?.opened ? 1 : 0) +
-        (order.emailTracking?.statusUpdates?.filter(s => s.opened).length || 0),
-      totalEmailsClicked: (order.emailTracking?.confirmation?.clicked ? 1 : 0) +
-        (order.emailTracking?.statusUpdates?.filter(s => s.clicked).length || 0),
+      totalEmailsSent:
+        (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(
+          (s) => s.emailStatus === "sent"
+        ).length || 0),
+      totalEmailsFailed:
+        (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter(
+          (s) => s.emailStatus === "failed"
+        ).length || 0),
+      totalEmailsOpened:
+        (order.emailTracking?.confirmation?.opened ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter((s) => s.opened).length ||
+          0),
+      totalEmailsClicked:
+        (order.emailTracking?.confirmation?.clicked ? 1 : 0) +
+        (order.emailTracking?.statusUpdates?.filter((s) => s.clicked).length ||
+          0),
       lastEmailSent: getLastEmailSent(order.emailTracking),
     },
   };
 
   return res
     .status(200)
-    .json(new ApiResponse(200, emailStatus, "Email status retrieved successfully", true));
+    .json(
+      new ApiResponse(
+        200,
+        emailStatus,
+        "Email status retrieved successfully",
+        true
+      )
+    );
 });
 
 /**
@@ -1738,21 +1924,197 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
  */
 function getLastEmailSent(emailTracking) {
   const dates = [];
-  
+
   if (emailTracking?.confirmation?.sentAt) {
     dates.push(new Date(emailTracking.confirmation.sentAt));
   }
-  
+
   if (emailTracking?.statusUpdates) {
-    emailTracking.statusUpdates.forEach(update => {
+    emailTracking.statusUpdates.forEach((update) => {
       if (update.sentAt) {
         dates.push(new Date(update.sentAt));
       }
     });
   }
-  
+
   return dates.length > 0 ? new Date(Math.max(...dates)) : null;
 }
+
+const generatePaymentLinks = asyncHandler(async (req, res) => {
+  const { orderId, amount } = req.body;
+
+  // Validate input
+  if (!orderId || !amount) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Order ID and amount are required", false));
+  }
+
+  // Validate orderId format
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Invalid order ID format", false));
+  }
+
+  // Validate amount
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Amount must be a positive number", false));
+  }
+
+  try {
+    // Find the order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json(new ApiResponse(404, null, "Order not found", false));
+    }
+
+    // // Check if payment link already exists
+    // if (order.paymentLink) {
+    //   return res
+    //     .status(400)
+    //     .json(new ApiResponse(400, null, "Payment link already exists for this order", false));
+    // }
+
+    // Convert amount to paise (Razorpay expects amount in smallest currency unit)
+    const amountInPaise = Math.round(numericAmount * 100);
+
+    // Create payment link using Razorpay
+    const paymentLinkOptions = {
+      amount: amountInPaise,
+      currency: 'INR',
+      description: `Payment for Order #${orderId}`,
+      customer: {
+        name: order.address.name || 'Customer',
+        contact: order.address.mobile || '',
+        email: req.user?.email || ''
+      },
+      notify: {
+        sms: true,
+        email: true
+      },
+      reminder_enable: true
+    };
+
+    const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
+
+    // Update h payorder witment link information
+    order.paymentLink = paymentLink.short_url;
+    order.paymentLinkId = paymentLink.id;
+    await order.save();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {
+        paymentLink: paymentLink.short_url,
+        paymentLinkId: paymentLink.id,
+        orderId: order._id,
+        amount: numericAmount
+      }, "Payment link generated successfully", true));
+
+  } catch (error) {
+    console.error("Error generating payment link:", error);
+    
+    // Handle specific Razorpay errors
+    if (error.error) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, `Payment link creation failed: ${error.error.description || error.error.message}`, false));
+    }
+
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Failed to generate payment link", false));
+  }
+});
+
+const handlePaymentWebhook = asyncHandler(async (req, res) => {
+  const crypto = require('crypto');
+  
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const body = JSON.stringify(req.body);
+    
+    // Verify webhook signature
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(body)
+      .digest('hex');
+    
+    if (signature !== expectedSignature) {
+      console.error('Webhook signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+    
+    const event = req.body;
+    console.log('Received webhook event:', event.event);
+    
+    // Handle payment captured event
+    if (event.event === 'payment.captured') {
+      const payment = event.payload.payment.entity;
+      const paymentLink = event.payload.payment_link?.entity;
+      
+      if (paymentLink) {
+        // Find order by payment link ID
+        const order = await Order.findOne({ paymentLinkId: paymentLink.id });
+        
+        if (order) {
+          // Verify payment amount matches order amount
+          const orderAmountInPaise = Math.round(parseFloat(order.finalTotalAmount.toString()) * 100);
+          
+          if (payment.amount === orderAmountInPaise && payment.status === 'captured') {
+            // Update order with payment details
+            order.paymentStatus = 'paid';
+            order.paymentId = payment.id;
+            order.paymentMethod = payment.method;
+            order.paidAt = new Date();
+            
+            // Update order status to confirmed if it's still pending
+            if (order.status === 'pending') {
+              order.status = 'confirmed';
+            }
+            
+            await order.save();
+            
+            console.log(`Payment captured for order ${order._id}, payment ID: ${payment.id}`);
+          } else {
+            console.error(`Payment amount mismatch for order ${order._id}. Expected: ${orderAmountInPaise}, Received: ${payment.amount}`);
+          }
+        } else {
+          console.error(`Order not found for payment link ID: ${paymentLink.id}`);
+        }
+      }
+    }
+    
+    // Handle payment failed event
+    if (event.event === 'payment.failed') {
+      const payment = event.payload.payment.entity;
+      const paymentLink = event.payload.payment_link?.entity;
+      
+      if (paymentLink) {
+        const order = await Order.findOne({ paymentLinkId: paymentLink.id });
+        
+        if (order) {
+          order.paymentStatus = 'failed';
+          await order.save();
+          
+          console.log(`Payment failed for order ${order._id}, payment ID: ${payment.id}`);
+        }
+      }
+    }
+    
+    res.status(200).json({ status: 'success' });
+    
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
 
 module.exports = {
   createOrder,
@@ -1767,4 +2129,6 @@ module.exports = {
   getOrdersByProductId,
   getOrderByIdFormUser,
   getOrderEmailStatus,
+  generatePaymentLinks,
+  handlePaymentWebhook,
 };
