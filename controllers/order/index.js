@@ -408,6 +408,147 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     );
 });
 
+const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
+  const { updates, status } = req.body;
+
+  console.log(">>>>",req.body);
+
+  // Validate input
+  if (!updates || !Array.isArray(updates) || updates.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "updates array with order IDs is required", false));
+  }
+
+  if (!status) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Status is required", false));
+  }
+
+  // Validate status values
+  const validStatuses = [
+    "pending",
+    "confirmed",
+    "processing",
+    "shipped",
+    "delivered",
+    "cancelled",
+  ];
+  if (!validStatuses.includes(status)) {
+    return res
+      .status(400)
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          false
+        )
+      );
+  }
+
+  const results = {
+    successful: [],
+    failed: [],
+    notFound: [],
+  };
+
+  // Process each order update
+  for (const update of updates) {
+    const orderId = update.id;
+
+    // Validate order ID
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      results.failed.push({
+        orderId,
+        error: "Invalid order ID format",
+      });
+      continue;
+    }
+
+    try {
+      const order = await Order.findById(orderId);
+      
+      if (!order) {
+        results.notFound.push({
+          orderId,
+          error: "Order not found",
+        });
+        continue;
+      }
+
+      const previousStatus = order.status;
+      order.status = status;
+      
+      // Add status update email tracking entry
+      if (!order.emailTracking) {
+        order.emailTracking = { confirmation: {}, statusUpdates: [] };
+      }
+      order.emailTracking.statusUpdates.push({
+        status: order.status,
+        emailStatus: "queued",
+        queuedAt: new Date(),
+        attempts: 0
+      });
+      
+      await order.save();
+
+      // Send status update email asynchronously (non-blocking)
+      setImmediate(async () => {
+        try {
+          const user = await User.findById(order.user);
+          if (user) {
+            await sendStatusUpdateEmails({
+              order: order.toObject(),
+              user: user.toObject(),
+              previousStatus,
+              updatedBy: req.admin ? req.admin.toObject() : null,
+            });
+          }
+        } catch (error) {
+          console.error(`❌ Failed to send status update email for order ${orderId}:`, error.message);
+        }
+      });
+
+      results.successful.push({
+        orderId,
+        previousStatus,
+        newStatus: status,
+      });
+    } catch (error) {
+      results.failed.push({
+        orderId,
+        error: error.message,
+      });
+    }
+  }
+
+  // Prepare response
+  const summary = {
+    total: updates.length,
+    successful: results.successful.length,
+    failed: results.failed.length,
+    notFound: results.notFound.length,
+    details: {
+      successful: results.successful,
+      failed: results.failed,
+      notFound: results.notFound,
+    }
+  };
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        summary,
+        `Bulk status update completed: ${results.successful.length} succeeded, ${results.failed.length} failed, ${results.notFound.length} not found`,
+        true
+      )
+    );
+});
+
 const getOrderById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -1619,6 +1760,7 @@ module.exports = {
   getAllOrders,
   updateOrder,
   updateOrderStatus,
+  bulkUpdateOrderStatus,
   getOrderById,
   editOrder,
   getProductsWithOrderCounts,

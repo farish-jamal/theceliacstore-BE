@@ -13,6 +13,7 @@ router.get("/", adminOrSuperAdmin, OrderController.getAllOrders);
 router.post("/", user, OrderController.createOrder);
 // router.post("/buy-now", user, OrderController.buyNowOrder);
 router.get("/history", user, OrderController.getOrderHistory);
+router.patch("/bulk-status", adminOrSuperAdmin, OrderController.bulkUpdateOrderStatus);
 router.get("/products-with-orders", adminOrSuperAdmin, OrderController.getProductsWithOrderCounts);
 router.get("/by-product/:productId", adminOrSuperAdmin, OrderController.getOrdersByProductId);
 router.get("/:id/email-status", adminOrSuperAdmin, OrderController.getOrderEmailStatus);
