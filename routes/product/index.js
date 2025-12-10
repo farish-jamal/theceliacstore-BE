@@ -15,6 +15,10 @@ router.get("/sample", adminOrSuperAdmin, ProductController.generateSampleFile);
 router.get("/admin", adminOrSuperAdmin, ProductController.getProductsByAdmin);
 router.get("/recommendations", ProductController.getProductRecommendations);
 router.get("/check-purchased", user, ProductController.checkProductPurchased);
+
+router.post("/migrate-images/all", adminOrSuperAdmin, ProductController.migrateAllProductsImagesToCloudinary);
+router.post("/migrate-images/:id", adminOrSuperAdmin, ProductController.migrateProductImagesToCloudinary);
+
 router.get("/:id", ProductController.getProductById);
 router.put("/:id", adminOrSuperAdmin, upload.any(), ProductController.updateProduct);
 router.delete("/:id", adminOrSuperAdmin, ProductController.deleteProduct);

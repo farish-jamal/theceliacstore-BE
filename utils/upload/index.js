@@ -51,3 +51,34 @@ exports.uploadPDF = async (filePath, folder = "") => {
     throw new Error(`PDF Upload Error: ${error.message}`);
   }
 };
+
+exports.uploadFromUrl = async (imageUrl, folder = "") => {
+  try {
+    if (imageUrl.includes("res.cloudinary.com")) {
+      return imageUrl;
+    }
+
+    const result = await cloudinary_js_config.uploader.upload(imageUrl, {
+      folder,
+      resource_type: "image",
+    });
+    return result.secure_url;
+  } catch (error) {
+    throw new Error(`URL Upload Error for ${imageUrl}: ${error.message}`);
+  }
+};
+
+exports.migrateImagesToCloudinary = async (imageUrls, folder = "") => {
+  try {
+    const uploadedUrls = [];
+    for (const url of imageUrls) {
+      if (url && typeof url === "string") {
+        const newUrl = await exports.uploadFromUrl(url, folder);
+        uploadedUrls.push(newUrl);
+      }
+    }
+    return uploadedUrls;
+  } catch (error) {
+    throw new Error(`Image Migration Error: ${error.message}`);
+  }
+};

@@ -5,6 +5,8 @@ const { asyncHandler } = require("../../common/asyncHandler.js");
 const {
   uploadMultipleFiles,
   uploadSingleFile,
+  uploadFromUrl,
+  migrateImagesToCloudinary,
 } = require("../../utils/upload/index.js");
 const Product = require("../../models/productsModel.js");
 const XLSX = require("xlsx");
@@ -913,6 +915,240 @@ const generateSampleFile = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Migrate all images of a product to Cloudinary
+ * Takes all images (banner_image, images array, variant images) and re-uploads them to Cloudinary
+ */
+const migrateProductImagesToCloudinary = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.json(new ApiResponse(400, null, "Invalid product ID", false));
+  }
+
+  const product = await Product.findById(id);
+  if (!product) {
+    return res.json(new ApiResponse(404, null, "Product not found", false));
+  }
+
+  const cloudinaryFolder = "products";
+  const migrationResults = {
+    banner_image: { old: null, new: null, status: "skipped" },
+    images: [],
+    variants: [],
+  };
+
+  try {
+    // Migrate banner_image
+    if (product.banner_image && !product.banner_image.includes("res.cloudinary.com")) {
+      migrationResults.banner_image.old = product.banner_image;
+      const newBannerUrl = await uploadFromUrl(product.banner_image, cloudinaryFolder);
+      product.banner_image = newBannerUrl;
+      migrationResults.banner_image.new = newBannerUrl;
+      migrationResults.banner_image.status = "migrated";
+    } else if (product.banner_image) {
+      migrationResults.banner_image.status = "already_cloudinary";
+    }
+
+    // Migrate product images array
+    if (Array.isArray(product.images) && product.images.length > 0) {
+      const newImages = [];
+      for (const imgUrl of product.images) {
+        const imageResult = { old: imgUrl, new: null, status: "skipped" };
+        
+        if (imgUrl && !imgUrl.includes("res.cloudinary.com")) {
+          const newUrl = await uploadFromUrl(imgUrl, cloudinaryFolder);
+          newImages.push(newUrl);
+          imageResult.new = newUrl;
+          imageResult.status = "migrated";
+        } else if (imgUrl) {
+          newImages.push(imgUrl);
+          imageResult.status = "already_cloudinary";
+        }
+        
+        migrationResults.images.push(imageResult);
+      }
+      product.images = newImages;
+    }
+
+    // Migrate variant images
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+      for (let i = 0; i < product.variants.length; i++) {
+        const variant = product.variants[i];
+        const variantResult = {
+          variant_sku: variant.sku,
+          images: [],
+        };
+
+        if (Array.isArray(variant.images) && variant.images.length > 0) {
+          const newVariantImages = [];
+          for (const imgUrl of variant.images) {
+            const imageResult = { old: imgUrl, new: null, status: "skipped" };
+            
+            if (imgUrl && !imgUrl.includes("res.cloudinary.com")) {
+              const newUrl = await uploadFromUrl(imgUrl, cloudinaryFolder);
+              newVariantImages.push(newUrl);
+              imageResult.new = newUrl;
+              imageResult.status = "migrated";
+            } else if (imgUrl) {
+              newVariantImages.push(imgUrl);
+              imageResult.status = "already_cloudinary";
+            }
+            
+            variantResult.images.push(imageResult);
+          }
+          product.variants[i].images = newVariantImages;
+        }
+        
+        migrationResults.variants.push(variantResult);
+      }
+    }
+
+    // Save the updated product
+    await product.save();
+
+    // Count migrated images
+    const totalMigrated = 
+      (migrationResults.banner_image.status === "migrated" ? 1 : 0) +
+      migrationResults.images.filter(img => img.status === "migrated").length +
+      migrationResults.variants.reduce((acc, v) => acc + v.images.filter(img => img.status === "migrated").length, 0);
+
+    res.json(
+      new ApiResponse(
+        200,
+        {
+          product_id: product._id,
+          product_name: product.name,
+          total_images_migrated: totalMigrated,
+          migration_details: migrationResults,
+        },
+        `Successfully migrated ${totalMigrated} image(s) to Cloudinary`,
+        true
+      )
+    );
+  } catch (error) {
+    res.json(
+      new ApiResponse(
+        500,
+        { error: error.message, partial_results: migrationResults },
+        "Error during image migration",
+        false
+      )
+    );
+  }
+});
+
+/**
+ * Migrate all images of ALL products to Cloudinary (bulk operation)
+ * Use with caution - this can take a long time for large catalogs
+ */
+const migrateAllProductsImagesToCloudinary = asyncHandler(async (req, res) => {
+  const { limit = 10 } = req.query; // Default to 10 products at a time to avoid timeout
+
+  const cloudinaryFolder = "products";
+  
+  // Find products that have images NOT on Cloudinary
+  const products = await Product.find({
+    $or: [
+      { banner_image: { $exists: true, $ne: null, $not: /res\.cloudinary\.com/ } },
+      { images: { $elemMatch: { $not: /res\.cloudinary\.com/ } } },
+      { "variants.images": { $elemMatch: { $not: /res\.cloudinary\.com/ } } },
+    ],
+  }).limit(parseInt(limit, 10));
+
+  if (products.length === 0) {
+    return res.json(
+      new ApiResponse(200, { migrated_count: 0 }, "All product images are already on Cloudinary", true)
+    );
+  }
+
+  const results = {
+    total_products_processed: 0,
+    total_images_migrated: 0,
+    products: [],
+  };
+
+  for (const product of products) {
+    const productResult = {
+      product_id: product._id,
+      product_name: product.name,
+      images_migrated: 0,
+      errors: [],
+    };
+
+    try {
+      // Migrate banner_image
+      if (product.banner_image && !product.banner_image.includes("res.cloudinary.com")) {
+        product.banner_image = await uploadFromUrl(product.banner_image, cloudinaryFolder);
+        productResult.images_migrated++;
+      }
+
+      // Migrate product images array
+      if (Array.isArray(product.images) && product.images.length > 0) {
+        const newImages = [];
+        for (const imgUrl of product.images) {
+          if (imgUrl && !imgUrl.includes("res.cloudinary.com")) {
+            const newUrl = await uploadFromUrl(imgUrl, cloudinaryFolder);
+            newImages.push(newUrl);
+            productResult.images_migrated++;
+          } else if (imgUrl) {
+            newImages.push(imgUrl);
+          }
+        }
+        product.images = newImages;
+      }
+
+      // Migrate variant images
+      if (Array.isArray(product.variants) && product.variants.length > 0) {
+        for (let i = 0; i < product.variants.length; i++) {
+          const variant = product.variants[i];
+          if (Array.isArray(variant.images) && variant.images.length > 0) {
+            const newVariantImages = [];
+            for (const imgUrl of variant.images) {
+              if (imgUrl && !imgUrl.includes("res.cloudinary.com")) {
+                const newUrl = await uploadFromUrl(imgUrl, cloudinaryFolder);
+                newVariantImages.push(newUrl);
+                productResult.images_migrated++;
+              } else if (imgUrl) {
+                newVariantImages.push(imgUrl);
+              }
+            }
+            product.variants[i].images = newVariantImages;
+          }
+        }
+      }
+
+      await product.save();
+      results.total_products_processed++;
+      results.total_images_migrated += productResult.images_migrated;
+    } catch (error) {
+      productResult.errors.push(error.message);
+    }
+
+    results.products.push(productResult);
+  }
+
+  // Count remaining products to migrate
+  const remainingCount = await Product.countDocuments({
+    $or: [
+      { banner_image: { $exists: true, $ne: null, $not: /res\.cloudinary\.com/ } },
+      { images: { $elemMatch: { $not: /res\.cloudinary\.com/ } } },
+      { "variants.images": { $elemMatch: { $not: /res\.cloudinary\.com/ } } },
+    ],
+  });
+
+  results.remaining_products = remainingCount;
+
+  res.json(
+    new ApiResponse(
+      200,
+      results,
+      `Migrated ${results.total_images_migrated} images from ${results.total_products_processed} products. ${remainingCount} products remaining.`,
+      true
+    )
+  );
+});
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -925,4 +1161,6 @@ module.exports = {
   bulkCreateProducts,
   exportProducts,
   generateSampleFile,
+  migrateProductImagesToCloudinary,
+  migrateAllProductsImagesToCloudinary,
 };
