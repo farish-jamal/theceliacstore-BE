@@ -11,6 +11,7 @@ router.get("/", adminOrSuperAdmin, OrderController.getAllOrders);
 // router.get("/overview", adminOrSuperAdmin, OrderController.getOrderOverview);
 
 router.post("/", user, OrderController.createOrder);
+router.post("/guest", OrderController.createGuestOrder);
 // router.post("/buy-now", user, OrderController.buyNowOrder);
 router.get("/history", user, OrderController.getOrderHistory);
 router.patch("/bulk-status", adminOrSuperAdmin, OrderController.bulkUpdateOrderStatus);

@@ -133,6 +133,295 @@ const getAllOrders = asyncHandler(async (req, res) => {
   }
 });
 
+const createGuestOrder = asyncHandler(async (req, res) => {
+  const { items, address } = req.body;
+
+  // Validate items
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Items array is required and cannot be empty", false));
+  }
+
+  // Validate address
+  if (!address || !address.name || !address.mobile || !address.pincode || !address.city || !address.state) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Address with name, mobile, pincode, city, and state is required", false));
+  }
+
+  let totalAmount = 0;
+  let discountedTotalAmount = 0;
+  let totalWeightGrams = 0;
+  const orderItems = [];
+
+  for (const item of items) {
+    if (item.type === "product") {
+      if (!item.product_id || !mongoose.Types.ObjectId.isValid(item.product_id)) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, `Invalid product_id: ${item.product_id}`, false));
+      }
+
+      const product = await Product.findById(item.product_id);
+      if (!product) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, `Product not found: ${item.product_id}`, false));
+      }
+
+      const price = parseFloat(product.price.toString());
+      const discountedPrice = product.discounted_price
+        ? parseFloat(product.discounted_price.toString())
+        : price;
+      const quantity = item.quantity || 1;
+      const itemTotal = price * quantity;
+      const discountedItemTotal = discountedPrice * quantity;
+      totalAmount += itemTotal;
+      discountedTotalAmount += discountedItemTotal;
+
+      // Calculate weight for shipping
+      if (product.weight_in_grams) {
+        totalWeightGrams += product.weight_in_grams * quantity;
+      }
+
+      orderItems.push({
+        type: "product",
+        product: {
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          discounted_price: product.discounted_price,
+          banner_image: product.banner_image,
+          sub_category: product.sub_category,
+        },
+        quantity: quantity,
+        total_amount: itemTotal,
+        discounted_total_amount: discountedItemTotal,
+      });
+    } else if (item.type === "bundle") {
+      if (!item.bundle_id || !mongoose.Types.ObjectId.isValid(item.bundle_id)) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, `Invalid bundle_id: ${item.bundle_id}`, false));
+      }
+
+      const bundle = await Bundle.findById(item.bundle_id);
+      if (!bundle) {
+        return res
+          .status(400)
+          .json(new ApiResponse(400, null, `Bundle not found: ${item.bundle_id}`, false));
+      }
+
+      const price = parseFloat(bundle.price.toString());
+      const discountedPrice = bundle.discounted_price
+        ? parseFloat(bundle.discounted_price.toString())
+        : price;
+      const quantity = item.quantity || 1;
+      const itemTotal = price * quantity;
+      const discountedItemTotal = discountedPrice * quantity;
+      totalAmount += itemTotal;
+      discountedTotalAmount += discountedItemTotal;
+
+      // Calculate weight for bundles - sum up all products in the bundle
+      if (bundle.products && Array.isArray(bundle.products)) {
+        for (const bundleProduct of bundle.products) {
+          const product = await Product.findById(bundleProduct.product);
+          if (product && product.weight_in_grams) {
+            totalWeightGrams +=
+              product.weight_in_grams *
+              bundleProduct.quantity *
+              quantity;
+          }
+        }
+      }
+
+      orderItems.push({
+        type: "bundle",
+        bundle: {
+          _id: bundle._id,
+          name: bundle.name,
+          price: bundle.price,
+          discounted_price: bundle.discounted_price,
+          images: bundle.images,
+          description: bundle.description,
+          products: bundle.products,
+        },
+        quantity: quantity,
+        total_amount: itemTotal,
+        discounted_total_amount: discountedItemTotal,
+      });
+    } else {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, `Invalid item type: ${item.type}. Must be 'product' or 'bundle'`, false));
+    }
+  }
+
+  if (orderItems.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "No valid items found", false));
+  }
+
+  // Create address snapshot
+  const addressSnapshot = {
+    name: address.name,
+    mobile: address.mobile,
+    pincode: address.pincode,
+    locality: address.locality || "",
+    address: address.address || "",
+    city: address.city,
+    state: address.state,
+    landmark: address.landmark || "",
+    alternatePhone: address.alternatePhone || "",
+    addressType: address.addressType || "home",
+  };
+
+  // Calculate shipping cost based on pincode and total weight
+  const { shippingCost, shippingDetails } = await calculateShippingCost(
+    address.pincode,
+    totalWeightGrams
+  );
+
+  // Calculate final total amount (discounted total + shipping)
+  const finalTotalAmount = discountedTotalAmount + shippingCost;
+
+  const order = new Order({
+    user: null,
+    isGuestOrder: true,
+    guestInfo: {
+      email: address.email || null,
+      name: address.name,
+      mobile: address.mobile,
+    },
+    items: orderItems,
+    address: addressSnapshot,
+    totalAmount,
+    discountedTotalAmount,
+    shippingCost,
+    shippingDetails,
+    finalTotalAmount,
+    status: "pending",
+  });
+  await order.save();
+
+  // Mark email as queued initially
+  order.emailTracking = {
+    confirmation: {
+      status: "queued",
+      queuedAt: new Date(),
+      attempts: 0,
+    },
+    statusUpdates: [],
+  };
+  await order.save();
+
+  // Send emails asynchronously (non-blocking) - only if guest email is provided
+  if (address.email) {
+    (async () => {
+      try {
+        // Create guest user object for email template
+        const guestUser = {
+          name: address.name,
+          email: address.email,
+        };
+
+        // Send customer email
+        const customerHtmlContent = generateCustomerOrderConfirmation(
+          order.toObject(),
+          guestUser
+        );
+
+        const customerEmailOptions = {
+          to: address.email,
+          subject: `Order Received - ${order._id}`,
+          html: customerHtmlContent,
+        };
+
+        const customerEmailSent = await sendEmail(customerEmailOptions);
+
+        if (customerEmailSent.success) {
+          console.log("✅ Guest order confirmation email sent successfully to customer");
+          order.emailTracking.confirmation.status = "sent";
+          order.emailTracking.confirmation.sentAt = new Date();
+          await order.save();
+        }
+
+        // Send admin email
+        const admins = await Admin.find({
+          role: { $in: ["super_admin", "admin"] }
+        }).select("email");
+
+        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+
+        if (adminEmails.length > 0) {
+          const adminHtmlContent = generateCompanyOrderNotification(
+            order.toObject(),
+            guestUser
+          );
+          const adminEmailOptions = {
+            to: adminEmails[0],
+            subject: `🛒 New Guest Order Received - Order #${order._id}`,
+            html: adminHtmlContent,
+          };
+
+          const adminEmailSent = await sendEmail(adminEmailOptions);
+
+          if (adminEmailSent.success) {
+            console.log("✅ New guest order notification sent successfully to admin");
+          } else {
+            console.error("❌ Failed to send new guest order notification to admin");
+          }
+        }
+      } catch (error) {
+        console.error("❌ Failed to send guest order confirmation email:", error.message);
+        order.emailTracking.confirmation.status = "failed";
+        order.emailTracking.confirmation.failedAt = new Date();
+        order.emailTracking.confirmation.error = error.message;
+        await order.save();
+      }
+    })();
+  } else {
+    // Still send admin notification even if no guest email
+    (async () => {
+      try {
+        const admins = await Admin.find({
+          role: { $in: ["super_admin", "admin"] }
+        }).select("email");
+
+        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+
+        if (adminEmails.length > 0) {
+          const guestUser = {
+            name: address.name,
+            email: "No email provided",
+          };
+
+          const adminHtmlContent = generateCompanyOrderNotification(
+            order.toObject(),
+            guestUser
+          );
+          const adminEmailOptions = {
+            to: adminEmails[0],
+            subject: `🛒 New Guest Order Received - Order #${order._id}`,
+            html: adminHtmlContent,
+          };
+
+          await sendEmail(adminEmailOptions);
+          console.log("✅ New guest order notification sent successfully to admin");
+        }
+      } catch (error) {
+        console.error("❌ Failed to send admin notification for guest order:", error.message);
+      }
+    })();
+  }
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, order, "Guest order created successfully", true));
+});
+
 const createOrder = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { cartId, addressId } = req.body;
@@ -2118,6 +2407,7 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
 
 module.exports = {
   createOrder,
+  createGuestOrder,
   getOrderHistory,
   getAllOrders,
   updateOrder,
