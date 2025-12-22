@@ -4,6 +4,7 @@ const ApiResponse = require("../../../utils/ApiResponse");
 const { generateAccessToken } = require("../../../utils/auth");
 const { sendWelcomeEmail, sendForgotPasswordEmail } = require("../../../utils/email/directEmailService");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 
 const getAllUsers = asyncHandler(async (req, res) => {
   const superAdminId = req.admin._id;
@@ -211,6 +212,110 @@ const forgotPassword = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * Google OAuth Login
+ * Verifies Google ID token and creates/logs in user
+ */
+const googleLogin = asyncHandler(async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "Google ID token is required", false));
+  }
+
+  try {
+    // Initialize Google OAuth client
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    // Verify the ID token
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res
+        .status(400)
+        .json(new ApiResponse(400, null, "Email not provided by Google", false));
+    }
+
+    // Check if user exists with this Google ID
+    let user = await User.findOne({ googleId });
+
+    if (!user) {
+      // Check if user exists with this email (might have registered with email/password)
+      user = await User.findOne({ email });
+
+      if (user) {
+        // Link Google account to existing user
+        user.googleId = googleId;
+        user.authProvider = user.authProvider === "local" ? "local" : "google";
+        if (picture && !user.profilePicture) {
+          user.profilePicture = picture;
+        }
+        await user.save();
+      } else {
+        // Create new user with Google account
+        user = await User.create({
+          name,
+          email,
+          googleId,
+          authProvider: "google",
+          profilePicture: picture,
+        });
+
+        // Send welcome email asynchronously (non-blocking)
+        setImmediate(async () => {
+          try {
+            await sendWelcomeEmail({
+              user: user.toObject(),
+            });
+          } catch (error) {
+            console.error("❌ Failed to send welcome email:", error.message);
+          }
+        });
+      }
+    } else {
+      // Update profile picture if changed
+      if (picture && user.profilePicture !== picture) {
+        user.profilePicture = picture;
+        await user.save();
+      }
+    }
+
+    const accessToken = generateAccessToken(user._id);
+
+    const data = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      profilePicture: user.profilePicture,
+      authProvider: user.authProvider,
+      token: accessToken,
+    };
+
+    res.json(new ApiResponse(200, data, "Google login successful", true));
+  } catch (error) {
+    console.error("Google login error:", error);
+    
+    if (error.message.includes("Token used too late") || error.message.includes("Invalid token")) {
+      return res
+        .status(401)
+        .json(new ApiResponse(401, null, "Invalid or expired Google token", false));
+    }
+
+    return res
+      .status(500)
+      .json(new ApiResponse(500, null, "Google authentication failed", false));
+  }
+});
+
 module.exports = {
   getAllUsers,
   registerUser,
@@ -219,4 +324,5 @@ module.exports = {
   deleteUser,
   getUserById,
   forgotPassword,
+  googleLogin,
 };
