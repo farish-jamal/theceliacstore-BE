@@ -261,13 +261,14 @@ const googleLogin = asyncHandler(async (req, res) => {
         await user.save();
       } else {
         // Create new user with Google account
+        // Note: Don't include 'phone' field at all - let it be undefined
+        // This allows multiple Google users without triggering unique constraint
         user = await User.create({
           name,
           email,
           googleId,
           authProvider: "google",
           profilePicture: picture,
-          phone: null, // Explicitly set phone to null for Google users
         });
 
         // Send welcome email asynchronously (non-blocking)

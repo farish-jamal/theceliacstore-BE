@@ -6,18 +6,18 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: false }, // Optional for Google OAuth users
-    phone: { 
-      type: String, 
-      required: false, 
+    phone: {
+      type: String,
+      required: false,
       unique: true,
       sparse: true // Allows multiple null values for Google users without phone
     },
     // Google OAuth fields
     googleId: { type: String, unique: true, sparse: true },
-    authProvider: { 
-      type: String, 
-      enum: ["local", "google"], 
-      default: "local" 
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local"
     },
     profilePicture: { type: String, default: null },
   },
