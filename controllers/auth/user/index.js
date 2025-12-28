@@ -267,6 +267,7 @@ const googleLogin = asyncHandler(async (req, res) => {
           googleId,
           authProvider: "google",
           profilePicture: picture,
+          phone: null, // Explicitly set phone to null for Google users
         });
 
         // Send welcome email asynchronously (non-blocking)
@@ -303,16 +304,19 @@ const googleLogin = asyncHandler(async (req, res) => {
     res.json(new ApiResponse(200, data, "Google login successful", true));
   } catch (error) {
     console.error("Google login error:", error);
-    
+    console.error("Error details:", error.message);
+    console.error("Stack trace:", error.stack);
+
     if (error.message.includes("Token used too late") || error.message.includes("Invalid token")) {
       return res
         .status(401)
         .json(new ApiResponse(401, null, "Invalid or expired Google token", false));
     }
 
+    // Return specific error message for debugging
     return res
       .status(500)
-      .json(new ApiResponse(500, null, "Google authentication failed", false));
+      .json(new ApiResponse(500, null, error.message || "Google authentication failed", false));
   }
 });
 
