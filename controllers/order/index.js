@@ -590,7 +590,7 @@ const createOrder = asyncHandler(async (req, res) => {
       };
 
       const customerEmailSent = await sendEmail(customerEmailOptions);
-      
+
       if (customerEmailSent.success) {
         console.log("✅ Order confirmation email sent successfully to customer");
         // Update email tracking status
@@ -600,25 +600,25 @@ const createOrder = asyncHandler(async (req, res) => {
       }
 
       // Send admin email
-      const admins = await Admin.find({ 
-        role: { $in: ["super_admin", "admin"] } 
+      const admins = await Admin.find({
+        role: { $in: ["super_admin"] }
       }).select("email");
-      
+
       const adminEmails = admins.map(admin => admin.email).filter(Boolean);
-      
+
       if (adminEmails.length > 0) {
         const adminHtmlContent = generateCompanyOrderNotification(
           order.toObject(),
           user.toObject()
         );
         const adminEmailOptions = {
-          to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
+          to: 'farishjamal8@gmail.com', // Send to first admin (Brevo API handles single recipient)
           subject: `🛒 New Order Received - Order #${order._id}`,
           html: adminHtmlContent,
         };
 
         const adminEmailSent = await sendEmail(adminEmailOptions);
-        
+
         if (adminEmailSent.success) {
           console.log("✅ New order notification sent successfully to admin");
         } else {
@@ -756,7 +756,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
   const { updates, status } = req.body;
 
-  console.log(">>>>",req.body);
+  console.log(">>>>", req.body);
 
   // Validate input
   if (!updates || !Array.isArray(updates) || updates.length === 0) {
@@ -814,7 +814,7 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
 
     try {
       const order = await Order.findById(orderId);
-      
+
       if (!order) {
         results.notFound.push({
           orderId,
@@ -825,7 +825,7 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
 
       const previousStatus = order.status;
       order.status = status;
-      
+
       // Add status update email tracking entry
       if (!order.emailTracking) {
         order.emailTracking = { confirmation: {}, statusUpdates: [] };
@@ -836,7 +836,7 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
         queuedAt: new Date(),
         attempts: 0
       });
-      
+
       await order.save();
 
       // Send status update email asynchronously (non-blocking)
@@ -1882,15 +1882,15 @@ const updateOrder = asyncHandler(async (req, res) => {
           order.toObject(),
           user.toObject()
         );
-  
+
         const customerEmailOptions = {
           to: user.email,
           subject: `Order Updated - ${order._id}`,
           html: customerHtmlContent,
         };
-  
+
         const customerEmailSent = await sendEmail(customerEmailOptions);
-        
+
         if (customerEmailSent.success) {
           console.log("✅ Order updated email sent successfully to customer");
           // Update email tracking status
@@ -1898,14 +1898,14 @@ const updateOrder = asyncHandler(async (req, res) => {
           order.emailTracking.confirmation.sentAt = new Date();
           await order.save();
         }
-  
+
         // Send admin email
-        const admins = await Admin.find({ 
-          role: { $in: ["super_admin", "admin"] } 
+        const admins = await Admin.find({
+          role: { $in: ["super_admin", "admin"] }
         }).select("email");
-        
+
         const adminEmails = admins.map(admin => admin.email).filter(Boolean);
-        
+
         if (adminEmails.length > 0) {
           const adminHtmlContent = generateCompanyOrderUpdate(
             order.toObject(),
@@ -1916,9 +1916,9 @@ const updateOrder = asyncHandler(async (req, res) => {
             subject: `🛒 Order Updated - Order #${order._id}`,
             html: adminHtmlContent,
           };
-  
+
           const adminEmailSent = await sendEmail(adminEmailOptions);
-          
+
           if (adminEmailSent.success) {
             console.log("✅ Order updated notification sent successfully to admin");
           } else {
@@ -2308,7 +2308,7 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
 
   } catch (error) {
     console.error("Error generating payment link:", error);
-    
+
     // Handle specific Razorpay errors
     if (error.error) {
       return res
@@ -2324,52 +2324,52 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
 
 const handlePaymentWebhook = asyncHandler(async (req, res) => {
   const crypto = require('crypto');
-  
+
   try {
     const signature = req.headers['x-razorpay-signature'];
     const body = JSON.stringify(req.body);
-    
+
     // Verify webhook signature
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
       .update(body)
       .digest('hex');
-    
+
     if (signature !== expectedSignature) {
       console.error('Webhook signature verification failed');
       return res.status(400).json({ error: 'Invalid signature' });
     }
-    
+
     const event = req.body;
     console.log('Received webhook event:', event.event);
-    
+
     // Handle payment captured event
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
       const paymentLink = event.payload.payment_link?.entity;
-      
+
       if (paymentLink) {
         // Find order by payment link ID
         const order = await Order.findOne({ paymentLinkId: paymentLink.id });
-        
+
         if (order) {
           // Verify payment amount matches order amount
           const orderAmountInPaise = Math.round(parseFloat(order.finalTotalAmount.toString()) * 100);
-          
+
           if (payment.amount === orderAmountInPaise && payment.status === 'captured') {
             // Update order with payment details
             order.paymentStatus = 'paid';
             order.paymentId = payment.id;
             order.paymentMethod = payment.method;
             order.paidAt = new Date();
-            
+
             // Update order status to confirmed if it's still pending
             if (order.status === 'pending') {
               order.status = 'confirmed';
             }
-            
+
             await order.save();
-            
+
             console.log(`Payment captured for order ${order._id}, payment ID: ${payment.id}`);
           } else {
             console.error(`Payment amount mismatch for order ${order._id}. Expected: ${orderAmountInPaise}, Received: ${payment.amount}`);
@@ -2379,26 +2379,26 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
         }
       }
     }
-    
+
     // Handle payment failed event
     if (event.event === 'payment.failed') {
       const payment = event.payload.payment.entity;
       const paymentLink = event.payload.payment_link?.entity;
-      
+
       if (paymentLink) {
         const order = await Order.findOne({ paymentLinkId: paymentLink.id });
-        
+
         if (order) {
           order.paymentStatus = 'failed';
           await order.save();
-          
+
           console.log(`Payment failed for order ${order._id}, payment ID: ${payment.id}`);
         }
       }
     }
-    
+
     res.status(200).json({ status: 'success' });
-    
+
   } catch (error) {
     console.error('Webhook processing error:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
