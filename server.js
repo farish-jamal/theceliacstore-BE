@@ -11,6 +11,7 @@ const swaggerUI = require("swagger-ui-express");
 // Routes Import
 const authUserRoutes = require("./routes/auth/user/index.js");
 const authAdminRoutes = require("./routes/auth/admin/index.js");
+const authSuperAdminRoutes = require("./routes/auth/super-admin/index.js");
 const categoryRoutes = require("./routes/category/index.js");
 const subCategoryRoutes = require("./routes/sub-category/index.js");
 const brandRoutes = require("./routes/brand/index.js");
@@ -48,6 +49,7 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use("/api/auth/admin", authAdminRoutes);
+app.use("/api/auth/super-admin", authSuperAdminRoutes);
 app.use("/api/auth/user", authUserRoutes);
 app.use("/api/category", categoryRoutes);
 app.use("/api/sub-category", subCategoryRoutes);
