@@ -13,10 +13,10 @@ const router = express.Router();
 // Apply superAdmin middleware to all routes
 router.use(superAdmin);
 
-router.get("/", getAllSuperAdmins);
-router.post("/", createSuperAdmin);
 router.get("/:id", getSingleSuperAdmin);
 router.patch("/:id", updateSuperAdmin);
 router.delete("/:id", deleteSuperAdmin);
+router.get("/", getAllSuperAdmins);
+router.post("/", createSuperAdmin);
 
 module.exports = router;
