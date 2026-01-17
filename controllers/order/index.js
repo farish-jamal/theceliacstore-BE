@@ -1,4 +1,4 @@
-const XLSX = require('xlsx');
+const XLSX = require("xlsx");
 const { asyncHandler } = require("../../common/asyncHandler");
 const ApiResponse = require("../../utils/ApiResponse");
 const mongoose = require("mongoose");
@@ -39,49 +39,56 @@ const exportOrders = asyncHandler(async (req, res) => {
 
     // Fetch orders with user, address, and items populated
     const orders = await Order.find(dateFilter)
-      .populate('user')
-      .populate('address')
-      .populate('items.product')
+      .populate("user")
+      .populate("address")
+      .populate("items.product")
       .lean();
 
     // Prepare data for XLSX
-    const xlsxData = orders.map(order => {
-      return {
-        orderId: order._id.toString(),
-        orderDate: order.createdAt,
-        userName: order.user ? order.user.name : '',
-        userEmail: order.user ? order.user.email : '',
-        userPhone: order.user ? order.user.phone : '',
-        address: order.address ? `${order.address.line1 || ''}, ${order.address.line2 || ''}, ${order.address.city || ''}, ${order.address.state || ''}, ${order.address.zip || ''}` : '',
-        items: order.items.map(item => {
-          return `${item.product ? item.product.name : ''} (x${item.quantity})`;
-        }).join('; '),
-        totalAmount: order.totalAmount,
-        status: order.status
-      };
-    });
+    const xlsxData = orders.map((order) => ({
+      orderId: order._id.toString(),
+      orderDate: order.createdAt,
+      userName: order.user?.name || "",
+      userEmail: order.user?.email || "",
+      userPhone: order.user?.phone || "",
+      address: order.address
+        ? `${order.address.address || ""}, ${order.address.city || ""}, ${order.address.state || ""}, ${order.address.pincode || ""}`
+        : "",
+      items: order.items
+        .map((item) => `${item.product?.name || ""} (x${item.quantity})`)
+        .join("; "),
+
+      totalAmount: order.finalTotalAmount
+        ? order.finalTotalAmount.toString()
+        : "0",
+
+      shippingCost: order.shippingCost ? order.shippingCost.toString() : "0",
+
+      isGuestOrder: order.isGuestOrder ? "Yes" : "No",
+      status: order.status,
+    }));
 
     const worksheet = XLSX.utils.json_to_sheet(xlsxData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
     // Use existing uploadPDF utility to upload the Excel buffer as a file
-    const fs = require('fs/promises');
-    const path = require('path');
-    const { uploadPDF } = require('../../utils/upload');
+    const fs = require("fs/promises");
+    const path = require("path");
+    const { uploadPDF } = require("../../utils/upload");
 
     // Write buffer to a temporary file
     const tempFileName = `orders_export_${Date.now()}.xlsx`;
-    const tempFilePath = path.join(__dirname, '../../uploads/', tempFileName);
+    const tempFilePath = path.join(__dirname, "../../uploads/", tempFileName);
     await fs.writeFile(tempFilePath, buffer);
 
     // Upload to Cloudinary as raw file
-    const url = await uploadPDF(tempFilePath, 'exports');
+    const url = await uploadPDF(tempFilePath, "exports");
     return res.json({ url });
   } catch (err) {
-    console.error('Export Orders Error:', err);
-    return res.status(500).json({ error: 'Failed to export orders' });
+    console.error("Export Orders Error:", err);
+    return res.status(500).json({ error: "Failed to export orders" });
   }
 });
 
@@ -124,8 +131,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
               404,
               null,
               "No categories found for this service",
-              false
-            )
+              false,
+            ),
           );
       }
       const productIds = await Product.find({
@@ -139,8 +146,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
               404,
               null,
               "No products found in these categories",
-              false
-            )
+              false,
+            ),
           );
       }
       query["items.product._id"] = { $in: productIds };
@@ -181,8 +188,8 @@ const getAllOrders = asyncHandler(async (req, res) => {
           200,
           { data: orders, total },
           "Orders fetched successfully",
-          true
-        )
+          true,
+        ),
       );
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -199,14 +206,35 @@ const createGuestOrder = asyncHandler(async (req, res) => {
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res
       .status(400)
-      .json(new ApiResponse(400, null, "Items array is required and cannot be empty", false));
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          "Items array is required and cannot be empty",
+          false,
+        ),
+      );
   }
 
   // Validate address
-  if (!address || !address.name || !address.mobile || !address.pincode || !address.city || !address.state) {
+  if (
+    !address ||
+    !address.name ||
+    !address.mobile ||
+    !address.pincode ||
+    !address.city ||
+    !address.state
+  ) {
     return res
       .status(400)
-      .json(new ApiResponse(400, null, "Address with name, mobile, pincode, city, and state is required", false));
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          "Address with name, mobile, pincode, city, and state is required",
+          false,
+        ),
+      );
   }
 
   let totalAmount = 0;
@@ -216,17 +244,34 @@ const createGuestOrder = asyncHandler(async (req, res) => {
 
   for (const item of items) {
     if (item.type === "product") {
-      if (!item.product_id || !mongoose.Types.ObjectId.isValid(item.product_id)) {
+      if (
+        !item.product_id ||
+        !mongoose.Types.ObjectId.isValid(item.product_id)
+      ) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, `Invalid product_id: ${item.product_id}`, false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              `Invalid product_id: ${item.product_id}`,
+              false,
+            ),
+          );
       }
 
       const product = await Product.findById(item.product_id);
       if (!product) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, `Product not found: ${item.product_id}`, false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              `Product not found: ${item.product_id}`,
+              false,
+            ),
+          );
       }
 
       const price = parseFloat(product.price.toString());
@@ -262,14 +307,28 @@ const createGuestOrder = asyncHandler(async (req, res) => {
       if (!item.bundle_id || !mongoose.Types.ObjectId.isValid(item.bundle_id)) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, `Invalid bundle_id: ${item.bundle_id}`, false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              `Invalid bundle_id: ${item.bundle_id}`,
+              false,
+            ),
+          );
       }
 
       const bundle = await Bundle.findById(item.bundle_id);
       if (!bundle) {
         return res
           .status(400)
-          .json(new ApiResponse(400, null, `Bundle not found: ${item.bundle_id}`, false));
+          .json(
+            new ApiResponse(
+              400,
+              null,
+              `Bundle not found: ${item.bundle_id}`,
+              false,
+            ),
+          );
       }
 
       const price = parseFloat(bundle.price.toString());
@@ -288,9 +347,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
           const product = await Product.findById(bundleProduct.product);
           if (product && product.weight_in_grams) {
             totalWeightGrams +=
-              product.weight_in_grams *
-              bundleProduct.quantity *
-              quantity;
+              product.weight_in_grams * bundleProduct.quantity * quantity;
           }
         }
       }
@@ -313,7 +370,14 @@ const createGuestOrder = asyncHandler(async (req, res) => {
     } else {
       return res
         .status(400)
-        .json(new ApiResponse(400, null, `Invalid item type: ${item.type}. Must be 'product' or 'bundle'`, false));
+        .json(
+          new ApiResponse(
+            400,
+            null,
+            `Invalid item type: ${item.type}. Must be 'product' or 'bundle'`,
+            false,
+          ),
+        );
     }
   }
 
@@ -340,7 +404,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
   // Calculate shipping cost based on pincode and total weight
   const { shippingCost, shippingDetails } = await calculateShippingCost(
     address.pincode,
-    totalWeightGrams
+    totalWeightGrams,
   );
 
   // Calculate final total amount (discounted total + shipping)
@@ -389,7 +453,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
         // Send customer email
         const customerHtmlContent = generateCustomerOrderConfirmation(
           order.toObject(),
-          guestUser
+          guestUser,
         );
 
         const customerEmailOptions = {
@@ -401,7 +465,9 @@ const createGuestOrder = asyncHandler(async (req, res) => {
         const customerEmailSent = await sendEmail(customerEmailOptions);
 
         if (customerEmailSent.success) {
-          console.log("✅ Guest order confirmation email sent successfully to customer");
+          console.log(
+            "✅ Guest order confirmation email sent successfully to customer",
+          );
           order.emailTracking.confirmation.status = "sent";
           order.emailTracking.confirmation.sentAt = new Date();
           await order.save();
@@ -409,15 +475,15 @@ const createGuestOrder = asyncHandler(async (req, res) => {
 
         // Send admin email
         const admins = await Admin.find({
-          role: { $in: ["super_admin", "admin"] }
+          role: { $in: ["super_admin", "admin"] },
         }).select("email");
 
-        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+        const adminEmails = admins.map((admin) => admin.email).filter(Boolean);
 
         if (adminEmails.length > 0) {
           const adminHtmlContent = generateCompanyOrderNotification(
             order.toObject(),
-            guestUser
+            guestUser,
           );
           const adminEmailOptions = {
             to: adminEmails[0],
@@ -428,13 +494,20 @@ const createGuestOrder = asyncHandler(async (req, res) => {
           const adminEmailSent = await sendEmail(adminEmailOptions);
 
           if (adminEmailSent.success) {
-            console.log("✅ New guest order notification sent successfully to admin");
+            console.log(
+              "✅ New guest order notification sent successfully to admin",
+            );
           } else {
-            console.error("❌ Failed to send new guest order notification to admin");
+            console.error(
+              "❌ Failed to send new guest order notification to admin",
+            );
           }
         }
       } catch (error) {
-        console.error("❌ Failed to send guest order confirmation email:", error.message);
+        console.error(
+          "❌ Failed to send guest order confirmation email:",
+          error.message,
+        );
         order.emailTracking.confirmation.status = "failed";
         order.emailTracking.confirmation.failedAt = new Date();
         order.emailTracking.confirmation.error = error.message;
@@ -446,10 +519,10 @@ const createGuestOrder = asyncHandler(async (req, res) => {
     (async () => {
       try {
         const admins = await Admin.find({
-          role: { $in: ["super_admin", "admin"] }
+          role: { $in: ["super_admin", "admin"] },
         }).select("email");
 
-        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+        const adminEmails = admins.map((admin) => admin.email).filter(Boolean);
 
         if (adminEmails.length > 0) {
           const guestUser = {
@@ -459,7 +532,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
 
           const adminHtmlContent = generateCompanyOrderNotification(
             order.toObject(),
-            guestUser
+            guestUser,
           );
           const adminEmailOptions = {
             to: adminEmails[0],
@@ -468,17 +541,24 @@ const createGuestOrder = asyncHandler(async (req, res) => {
           };
 
           await sendEmail(adminEmailOptions);
-          console.log("✅ New guest order notification sent successfully to admin");
+          console.log(
+            "✅ New guest order notification sent successfully to admin",
+          );
         }
       } catch (error) {
-        console.error("❌ Failed to send admin notification for guest order:", error.message);
+        console.error(
+          "❌ Failed to send admin notification for guest order:",
+          error.message,
+        );
       }
     })();
   }
 
   return res
     .status(201)
-    .json(new ApiResponse(201, order, "Guest order created successfully", true));
+    .json(
+      new ApiResponse(201, order, "Guest order created successfully", true),
+    );
 });
 
 const createOrder = asyncHandler(async (req, res) => {
@@ -597,7 +677,7 @@ const createOrder = asyncHandler(async (req, res) => {
   // This creates a snapshot of the shipping cost at order time
   const { shippingCost, shippingDetails } = await calculateShippingCost(
     address.pincode,
-    totalWeightGrams
+    totalWeightGrams,
   );
 
   // Calculate final total amount (discounted total + shipping)
@@ -639,7 +719,7 @@ const createOrder = asyncHandler(async (req, res) => {
       // Send customer email
       const customerHtmlContent = generateCustomerOrderConfirmation(
         order.toObject(),
-        user.toObject()
+        user.toObject(),
       );
 
       const customerEmailOptions = {
@@ -651,7 +731,9 @@ const createOrder = asyncHandler(async (req, res) => {
       const customerEmailSent = await sendEmail(customerEmailOptions);
 
       if (customerEmailSent.success) {
-        console.log("✅ Order confirmation email sent successfully to customer");
+        console.log(
+          "✅ Order confirmation email sent successfully to customer",
+        );
         // Update email tracking status
         order.emailTracking.confirmation.status = "sent";
         order.emailTracking.confirmation.sentAt = new Date();
@@ -660,18 +742,18 @@ const createOrder = asyncHandler(async (req, res) => {
 
       // Send admin email
       const admins = await Admin.find({
-        role: { $in: ["super_admin"] }
+        role: { $in: ["super_admin"] },
       }).select("email");
 
-      const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+      const adminEmails = admins.map((admin) => admin.email).filter(Boolean);
 
       if (adminEmails.length > 0) {
         const adminHtmlContent = generateCompanyOrderNotification(
           order.toObject(),
-          user.toObject()
+          user.toObject(),
         );
         const adminEmailOptions = {
-          to: 'farishjamal8@gmail.com', // Send to first admin (Brevo API handles single recipient)
+          to: "farishjamal8@gmail.com", // Send to first admin (Brevo API handles single recipient)
           subject: `🛒 New Order Received - Order #${order._id}`,
           html: adminHtmlContent,
         };
@@ -685,7 +767,10 @@ const createOrder = asyncHandler(async (req, res) => {
         }
       }
     } catch (error) {
-      console.error("❌ Failed to send order confirmation email:", error.message);
+      console.error(
+        "❌ Failed to send order confirmation email:",
+        error.message,
+      );
       // Update email tracking status
       order.emailTracking.confirmation.status = "failed";
       order.emailTracking.confirmation.failedAt = new Date();
@@ -693,7 +778,6 @@ const createOrder = asyncHandler(async (req, res) => {
       await order.save();
     }
   })();
-
 
   return res
     .status(201)
@@ -713,8 +797,8 @@ const getOrderHistory = asyncHandler(async (req, res) => {
         200,
         { data: orders, total },
         "Orders fetched successfully",
-        true
-      )
+        true,
+      ),
     );
 });
 
@@ -751,8 +835,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
           400,
           null,
           `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-          false
-        )
+          false,
+        ),
       );
   }
 
@@ -804,11 +888,10 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     }
   });
 
-
   return res
     .status(200)
     .json(
-      new ApiResponse(200, order, "Order status updated successfully", true)
+      new ApiResponse(200, order, "Order status updated successfully", true),
     );
 });
 
@@ -821,7 +904,14 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
   if (!updates || !Array.isArray(updates) || updates.length === 0) {
     return res
       .status(400)
-      .json(new ApiResponse(400, null, "updates array with order IDs is required", false));
+      .json(
+        new ApiResponse(
+          400,
+          null,
+          "updates array with order IDs is required",
+          false,
+        ),
+      );
   }
 
   if (!status) {
@@ -847,8 +937,8 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
           400,
           null,
           `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-          false
-        )
+          false,
+        ),
       );
   }
 
@@ -893,7 +983,7 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
         status: order.status,
         emailStatus: "queued",
         queuedAt: new Date(),
-        attempts: 0
+        attempts: 0,
       });
 
       await order.save();
@@ -911,7 +1001,10 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
             });
           }
         } catch (error) {
-          console.error(`❌ Failed to send status update email for order ${orderId}:`, error.message);
+          console.error(
+            `❌ Failed to send status update email for order ${orderId}:`,
+            error.message,
+          );
         }
       });
 
@@ -938,7 +1031,7 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
       successful: results.successful,
       failed: results.failed,
       notFound: results.notFound,
-    }
+    },
   };
 
   return res
@@ -948,8 +1041,8 @@ const bulkUpdateOrderStatus = asyncHandler(async (req, res) => {
         200,
         summary,
         `Bulk status update completed: ${results.successful.length} succeeded, ${results.failed.length} failed, ${results.notFound.length} not found`,
-        true
-      )
+        true,
+      ),
     );
 });
 
@@ -1007,7 +1100,7 @@ const editOrder = asyncHandler(async (req, res) => {
     return res
       .status(400)
       .json(
-        new ApiResponse(400, null, "Only pending orders can be edited", false)
+        new ApiResponse(400, null, "Only pending orders can be edited", false),
       );
   }
 
@@ -1148,7 +1241,7 @@ const editOrder = asyncHandler(async (req, res) => {
     const pincode = newAddress ? newAddress.pincode : order.address.pincode;
     const { shippingCost, shippingDetails } = await calculateShippingCost(
       pincode,
-      totalWeightGrams
+      totalWeightGrams,
     );
     order.shippingCost = shippingCost;
     order.shippingDetails = shippingDetails;
@@ -1251,7 +1344,7 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
           let finalDiscountedAmount = discountedTotalAmount;
           if (discountedTotalAmount === 0 && item.product.discounted_price) {
             const productDiscountedPrice = parseFloat(
-              item.product.discounted_price.toString()
+              item.product.discounted_price.toString(),
             );
             const productQuantity = item.quantity || 0;
             finalDiscountedAmount = productDiscountedPrice * productQuantity;
@@ -1315,7 +1408,7 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
       if (
         productOrderMap[productId].product.name &&
         productOrderMap[productId].product.name.startsWith(
-          "Product from Bundle:"
+          "Product from Bundle:",
         )
       ) {
         const product = await Product.findById(productId);
@@ -1344,7 +1437,7 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
         (item) =>
           item.product.name.toLowerCase().includes(searchLower) ||
           (item.product.sku &&
-            item.product.sku.toLowerCase().includes(searchLower))
+            item.product.sku.toLowerCase().includes(searchLower)),
       );
     }
 
@@ -1380,8 +1473,8 @@ const getProductsWithOrderCounts = asyncHandler(async (req, res) => {
           total,
         },
         "Products with order counts fetched successfully",
-        true
-      )
+        true,
+      ),
     );
   } catch (error) {
     console.error("Error fetching products with order counts:", error);
@@ -1463,15 +1556,16 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Quantity must be positive for product ${productId}`,
-                false
-              )
+                false,
+              ),
             );
         }
 
         // Check if product already exists in order
         const existingIndex = order.items.findIndex(
           (item) =>
-            item.type === "product" && item.product._id.toString() === productId
+            item.type === "product" &&
+            item.product._id.toString() === productId,
         );
 
         if (existingIndex !== -1) {
@@ -1482,8 +1576,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Product ${productId} already exists in order. Use 'products' array to update quantity.`,
-                false
-              )
+                false,
+              ),
             );
         }
 
@@ -1496,8 +1590,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Product ${productId} not found`,
-                false
-              )
+                false,
+              ),
             );
         }
 
@@ -1521,10 +1615,10 @@ const updateOrder = asyncHandler(async (req, res) => {
           },
           quantity: qty,
           total_amount: mongoose.Types.Decimal128.fromString(
-            itemTotal.toString()
+            itemTotal.toString(),
           ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
-            discountedItemTotal.toString()
+            discountedItemTotal.toString(),
           ),
         });
       }
@@ -1544,15 +1638,16 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Quantity cannot be negative for product ${productId}`,
-                false
-              )
+                false,
+              ),
             );
         }
 
         // Find the product in order items
         const itemIndex = order.items.findIndex(
           (item) =>
-            item.type === "product" && item.product._id.toString() === productId
+            item.type === "product" &&
+            item.product._id.toString() === productId,
         );
 
         if (itemIndex === -1) {
@@ -1563,8 +1658,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Product ${productId} not found in order. Use 'addProducts' array to add new products.`,
-                false
-              )
+                false,
+              ),
             );
         }
 
@@ -1582,8 +1677,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                   400,
                   null,
                   `Product ${productId} not found`,
-                  false
-                )
+                  false,
+                ),
               );
           }
 
@@ -1599,7 +1694,7 @@ const updateOrder = asyncHandler(async (req, res) => {
             mongoose.Types.Decimal128.fromString(itemTotal.toString());
           order.items[itemIndex].discounted_total_amount =
             mongoose.Types.Decimal128.fromString(
-              discountedItemTotal.toString()
+              discountedItemTotal.toString(),
             );
         }
       }
@@ -1619,15 +1714,15 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Quantity must be positive for bundle ${bundleId}`,
-                false
-              )
+                false,
+              ),
             );
         }
 
         // Check if bundle already exists in order
         const existingIndex = order.items.findIndex(
           (item) =>
-            item.type === "bundle" && item.bundle._id.toString() === bundleId
+            item.type === "bundle" && item.bundle._id.toString() === bundleId,
         );
 
         if (existingIndex !== -1) {
@@ -1638,8 +1733,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Bundle ${bundleId} already exists in order. Use 'bundles' array to update quantity.`,
-                false
-              )
+                false,
+              ),
             );
         }
 
@@ -1648,7 +1743,7 @@ const updateOrder = asyncHandler(async (req, res) => {
           return res
             .status(400)
             .json(
-              new ApiResponse(400, null, `Bundle ${bundleId} not found`, false)
+              new ApiResponse(400, null, `Bundle ${bundleId} not found`, false),
             );
         }
 
@@ -1673,10 +1768,10 @@ const updateOrder = asyncHandler(async (req, res) => {
           },
           quantity: qty,
           total_amount: mongoose.Types.Decimal128.fromString(
-            itemTotal.toString()
+            itemTotal.toString(),
           ),
           discounted_total_amount: mongoose.Types.Decimal128.fromString(
-            discountedItemTotal.toString()
+            discountedItemTotal.toString(),
           ),
         });
       }
@@ -1696,15 +1791,15 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Quantity cannot be negative for bundle ${bundleId}`,
-                false
-              )
+                false,
+              ),
             );
         }
 
         // Find the bundle in order items
         const itemIndex = order.items.findIndex(
           (item) =>
-            item.type === "bundle" && item.bundle._id.toString() === bundleId
+            item.type === "bundle" && item.bundle._id.toString() === bundleId,
         );
 
         if (itemIndex === -1) {
@@ -1715,8 +1810,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                 400,
                 null,
                 `Bundle ${bundleId} not found in order. Use 'addBundles' array to add new bundles.`,
-                false
-              )
+                false,
+              ),
             );
         }
 
@@ -1734,8 +1829,8 @@ const updateOrder = asyncHandler(async (req, res) => {
                   400,
                   null,
                   `Bundle ${bundleId} not found`,
-                  false
-                )
+                  false,
+                ),
               );
           }
 
@@ -1751,7 +1846,7 @@ const updateOrder = asyncHandler(async (req, res) => {
             mongoose.Types.Decimal128.fromString(itemTotal.toString());
           order.items[itemIndex].discounted_total_amount =
             mongoose.Types.Decimal128.fromString(
-              discountedItemTotal.toString()
+              discountedItemTotal.toString(),
             );
         }
       }
@@ -1770,15 +1865,15 @@ const updateOrder = asyncHandler(async (req, res) => {
       order.items.forEach((item) => {
         totalAmount += parseFloat(item.total_amount.toString());
         discountedTotalAmount += parseFloat(
-          item.discounted_total_amount.toString()
+          item.discounted_total_amount.toString(),
         );
       });
 
       order.totalAmount = mongoose.Types.Decimal128.fromString(
-        totalAmount.toString()
+        totalAmount.toString(),
       );
       order.discountedTotalAmount = mongoose.Types.Decimal128.fromString(
-        discountedTotalAmount.toString()
+        discountedTotalAmount.toString(),
       );
     }
 
@@ -1803,8 +1898,8 @@ const updateOrder = asyncHandler(async (req, res) => {
               400,
               null,
               "Shipping cost cannot be negative",
-              false
-            )
+              false,
+            ),
           );
       }
 
@@ -1849,7 +1944,7 @@ const updateOrder = asyncHandler(async (req, res) => {
 
       const result = await calculateShippingByZone(
         updateData.deliveryZoneId,
-        totalWeightGrams
+        totalWeightGrams,
       );
 
       if (result.shippingDetails) {
@@ -1864,8 +1959,8 @@ const updateOrder = asyncHandler(async (req, res) => {
               400,
               null,
               "Invalid or inactive delivery zone",
-              false
-            )
+              false,
+            ),
           );
       }
     }
@@ -1918,10 +2013,10 @@ const updateOrder = asyncHandler(async (req, res) => {
 
       // Recalculate final total
       const discountedTotal = parseFloat(
-        order.discountedTotalAmount.toString()
+        order.discountedTotalAmount.toString(),
       );
       order.finalTotalAmount = mongoose.Types.Decimal128.fromString(
-        (discountedTotal + newShippingCost).toString()
+        (discountedTotal + newShippingCost).toString(),
       );
     }
 
@@ -1932,14 +2027,13 @@ const updateOrder = asyncHandler(async (req, res) => {
 
     await order.save();
 
-
     (async () => {
       try {
         // Send customer email
         const user = await User.findById(order.user);
         const customerHtmlContent = generateCustomerOrderUpdate(
           order.toObject(),
-          user.toObject()
+          user.toObject(),
         );
 
         const customerEmailOptions = {
@@ -1960,15 +2054,15 @@ const updateOrder = asyncHandler(async (req, res) => {
 
         // Send admin email
         const admins = await Admin.find({
-          role: { $in: ["super_admin", "admin"] }
+          role: { $in: ["super_admin", "admin"] },
         }).select("email");
 
-        const adminEmails = admins.map(admin => admin.email).filter(Boolean);
+        const adminEmails = admins.map((admin) => admin.email).filter(Boolean);
 
         if (adminEmails.length > 0) {
           const adminHtmlContent = generateCompanyOrderUpdate(
             order.toObject(),
-            user.toObject()
+            user.toObject(),
           );
           const adminEmailOptions = {
             to: adminEmails[0], // Send to first admin (Brevo API handles single recipient)
@@ -1979,9 +2073,13 @@ const updateOrder = asyncHandler(async (req, res) => {
           const adminEmailSent = await sendEmail(adminEmailOptions);
 
           if (adminEmailSent.success) {
-            console.log("✅ Order updated notification sent successfully to admin");
+            console.log(
+              "✅ Order updated notification sent successfully to admin",
+            );
           } else {
-            console.error("❌ Failed to send order updated notification to admin");
+            console.error(
+              "❌ Failed to send order updated notification to admin",
+            );
           }
         }
       } catch (error) {
@@ -2073,7 +2171,7 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
           let finalDiscountedAmount = discountedTotalAmount;
           if (discountedTotalAmount === 0 && item.product.discounted_price) {
             const productDiscountedPrice = parseFloat(
-              item.product.discounted_price.toString()
+              item.product.discounted_price.toString(),
             );
             const productQuantity = item.quantity || 0;
             finalDiscountedAmount = productDiscountedPrice * productQuantity;
@@ -2104,7 +2202,7 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
         ) {
           // Check if this bundle contains the product
           const bundleProduct = item.bundle.products.find(
-            (bp) => bp.product && bp.product.toString() === productId
+            (bp) => bp.product && bp.product.toString() === productId,
           );
           if (bundleProduct) {
             orderContainsProduct = true;
@@ -2176,8 +2274,8 @@ const getOrdersByProductId = asyncHandler(async (req, res) => {
           200,
           result,
           "Orders by product ID fetched successfully",
-          true
-        )
+          true,
+        ),
       );
   } catch (error) {
     console.error("Error fetching orders by product ID:", error);
@@ -2200,7 +2298,7 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
   }
 
   const order = await Order.findById(id).select(
-    "_id emailTracking createdAt status"
+    "_id emailTracking createdAt status",
   );
 
   if (!order) {
@@ -2236,12 +2334,12 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
       totalEmailsSent:
         (order.emailTracking?.confirmation?.status === "sent" ? 1 : 0) +
         (order.emailTracking?.statusUpdates?.filter(
-          (s) => s.emailStatus === "sent"
+          (s) => s.emailStatus === "sent",
         ).length || 0),
       totalEmailsFailed:
         (order.emailTracking?.confirmation?.status === "failed" ? 1 : 0) +
         (order.emailTracking?.statusUpdates?.filter(
-          (s) => s.emailStatus === "failed"
+          (s) => s.emailStatus === "failed",
         ).length || 0),
       totalEmailsOpened:
         (order.emailTracking?.confirmation?.opened ? 1 : 0) +
@@ -2262,8 +2360,8 @@ const getOrderEmailStatus = asyncHandler(async (req, res) => {
         200,
         emailStatus,
         "Email status retrieved successfully",
-        true
-      )
+        true,
+      ),
     );
 });
 
@@ -2295,7 +2393,9 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
   if (!orderId || !amount) {
     return res
       .status(400)
-      .json(new ApiResponse(400, null, "Order ID and amount are required", false));
+      .json(
+        new ApiResponse(400, null, "Order ID and amount are required", false),
+      );
   }
 
   // Validate orderId format
@@ -2310,7 +2410,9 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
   if (isNaN(numericAmount) || numericAmount <= 0) {
     return res
       .status(400)
-      .json(new ApiResponse(400, null, "Amount must be a positive number", false));
+      .json(
+        new ApiResponse(400, null, "Amount must be a positive number", false),
+      );
   }
 
   try {
@@ -2335,18 +2437,18 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
     // Create payment link using Razorpay
     const paymentLinkOptions = {
       amount: amountInPaise,
-      currency: 'INR',
+      currency: "INR",
       description: `Payment for Order #${orderId}`,
       customer: {
-        name: order.address.name || 'Customer',
-        contact: order.address.mobile || '',
-        email: req.user?.email || ''
+        name: order.address.name || "Customer",
+        contact: order.address.mobile || "",
+        email: req.user?.email || "",
       },
       notify: {
         sms: true,
-        email: true
+        email: true,
       },
-      reminder_enable: true
+      reminder_enable: true,
     };
 
     const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
@@ -2356,15 +2458,19 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
     order.paymentLinkId = paymentLink.id;
     await order.save();
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, {
-        paymentLink: paymentLink.short_url,
-        paymentLinkId: paymentLink.id,
-        orderId: order._id,
-        amount: numericAmount
-      }, "Payment link generated successfully", true));
-
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          paymentLink: paymentLink.short_url,
+          paymentLinkId: paymentLink.id,
+          orderId: order._id,
+          amount: numericAmount,
+        },
+        "Payment link generated successfully",
+        true,
+      ),
+    );
   } catch (error) {
     console.error("Error generating payment link:", error);
 
@@ -2372,38 +2478,47 @@ const generatePaymentLinks = asyncHandler(async (req, res) => {
     if (error.error) {
       return res
         .status(400)
-        .json(new ApiResponse(400, null, `Payment link creation failed: ${error.error.description || error.error.message}`, false));
+        .json(
+          new ApiResponse(
+            400,
+            null,
+            `Payment link creation failed: ${error.error.description || error.error.message}`,
+            false,
+          ),
+        );
     }
 
     return res
       .status(500)
-      .json(new ApiResponse(500, null, "Failed to generate payment link", false));
+      .json(
+        new ApiResponse(500, null, "Failed to generate payment link", false),
+      );
   }
 });
 
 const handlePaymentWebhook = asyncHandler(async (req, res) => {
-  const crypto = require('crypto');
+  const crypto = require("crypto");
 
   try {
-    const signature = req.headers['x-razorpay-signature'];
+    const signature = req.headers["x-razorpay-signature"];
     const body = JSON.stringify(req.body);
 
     // Verify webhook signature
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
       .update(body)
-      .digest('hex');
+      .digest("hex");
 
     if (signature !== expectedSignature) {
-      console.error('Webhook signature verification failed');
-      return res.status(400).json({ error: 'Invalid signature' });
+      console.error("Webhook signature verification failed");
+      return res.status(400).json({ error: "Invalid signature" });
     }
 
     const event = req.body;
-    console.log('Received webhook event:', event.event);
+    console.log("Received webhook event:", event.event);
 
     // Handle payment captured event
-    if (event.event === 'payment.captured') {
+    if (event.event === "payment.captured") {
       const payment = event.payload.payment.entity;
       const paymentLink = event.payload.payment_link?.entity;
 
@@ -2413,34 +2528,45 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
 
         if (order) {
           // Verify payment amount matches order amount
-          const orderAmountInPaise = Math.round(parseFloat(order.finalTotalAmount.toString()) * 100);
+          const orderAmountInPaise = Math.round(
+            parseFloat(order.finalTotalAmount.toString()) * 100,
+          );
 
-          if (payment.amount === orderAmountInPaise && payment.status === 'captured') {
+          if (
+            payment.amount === orderAmountInPaise &&
+            payment.status === "captured"
+          ) {
             // Update order with payment details
-            order.paymentStatus = 'paid';
+            order.paymentStatus = "paid";
             order.paymentId = payment.id;
             order.paymentMethod = payment.method;
             order.paidAt = new Date();
 
             // Update order status to confirmed if it's still pending
-            if (order.status === 'pending') {
-              order.status = 'confirmed';
+            if (order.status === "pending") {
+              order.status = "confirmed";
             }
 
             await order.save();
 
-            console.log(`Payment captured for order ${order._id}, payment ID: ${payment.id}`);
+            console.log(
+              `Payment captured for order ${order._id}, payment ID: ${payment.id}`,
+            );
           } else {
-            console.error(`Payment amount mismatch for order ${order._id}. Expected: ${orderAmountInPaise}, Received: ${payment.amount}`);
+            console.error(
+              `Payment amount mismatch for order ${order._id}. Expected: ${orderAmountInPaise}, Received: ${payment.amount}`,
+            );
           }
         } else {
-          console.error(`Order not found for payment link ID: ${paymentLink.id}`);
+          console.error(
+            `Order not found for payment link ID: ${paymentLink.id}`,
+          );
         }
       }
     }
 
     // Handle payment failed event
-    if (event.event === 'payment.failed') {
+    if (event.event === "payment.failed") {
       const payment = event.payload.payment.entity;
       const paymentLink = event.payload.payment_link?.entity;
 
@@ -2448,19 +2574,20 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
         const order = await Order.findOne({ paymentLinkId: paymentLink.id });
 
         if (order) {
-          order.paymentStatus = 'failed';
+          order.paymentStatus = "failed";
           await order.save();
 
-          console.log(`Payment failed for order ${order._id}, payment ID: ${payment.id}`);
+          console.log(
+            `Payment failed for order ${order._id}, payment ID: ${payment.id}`,
+          );
         }
       }
     }
 
-    res.status(200).json({ status: 'success' });
-
+    res.status(200).json({ status: "success" });
   } catch (error) {
-    console.error('Webhook processing error:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    console.error("Webhook processing error:", error);
+    res.status(500).json({ error: "Webhook processing failed" });
   }
 });
 
