@@ -1,3 +1,4 @@
+const XLSX = require('xlsx');
 const { asyncHandler } = require("../../common/asyncHandler");
 const ApiResponse = require("../../utils/ApiResponse");
 const mongoose = require("mongoose");
@@ -25,6 +26,64 @@ const {
 } = require("../../utils/email/templates/orderConfirmation");
 const Admin = require("../../models/adminModel");
 const razorpay = require("../../config/razorpay");
+
+const exportOrders = asyncHandler(async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    let dateFilter = {};
+    if (start_date || end_date) {
+      dateFilter.createdAt = {};
+      if (start_date) dateFilter.createdAt.$gte = new Date(start_date);
+      if (end_date) dateFilter.createdAt.$lte = new Date(end_date);
+    }
+
+    // Fetch orders with user, address, and items populated
+    const orders = await Order.find(dateFilter)
+      .populate('user')
+      .populate('address')
+      .populate('items.product')
+      .lean();
+
+    // Prepare data for XLSX
+    const xlsxData = orders.map(order => {
+      return {
+        orderId: order._id.toString(),
+        orderDate: order.createdAt,
+        userName: order.user ? order.user.name : '',
+        userEmail: order.user ? order.user.email : '',
+        userPhone: order.user ? order.user.phone : '',
+        address: order.address ? `${order.address.line1 || ''}, ${order.address.line2 || ''}, ${order.address.city || ''}, ${order.address.state || ''}, ${order.address.zip || ''}` : '',
+        items: order.items.map(item => {
+          return `${item.product ? item.product.name : ''} (x${item.quantity})`;
+        }).join('; '),
+        totalAmount: order.totalAmount,
+        status: order.status
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(xlsxData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Use existing uploadPDF utility to upload the Excel buffer as a file
+    const fs = require('fs/promises');
+    const path = require('path');
+    const { uploadPDF } = require('../../utils/upload');
+
+    // Write buffer to a temporary file
+    const tempFileName = `orders_export_${Date.now()}.xlsx`;
+    const tempFilePath = path.join(__dirname, '../../uploads/', tempFileName);
+    await fs.writeFile(tempFilePath, buffer);
+
+    // Upload to Cloudinary as raw file
+    const url = await uploadPDF(tempFilePath, 'exports');
+    return res.json({ url });
+  } catch (err) {
+    console.error('Export Orders Error:', err);
+    return res.status(500).json({ error: 'Failed to export orders' });
+  }
+});
 
 const getAllOrders = asyncHandler(async (req, res) => {
   const adminId = req.admin._id;
@@ -2406,6 +2465,7 @@ const handlePaymentWebhook = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  exportOrders,
   createOrder,
   createGuestOrder,
   getOrderHistory,
