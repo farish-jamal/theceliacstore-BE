@@ -486,7 +486,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
             guestUser,
           );
           const adminEmailOptions = {
-            to: adminEmails[0],
+            to: 'theceliacstore@gmail.com', 
             subject: `🛒 New Guest Order Received - Order #${order._id}`,
             html: adminHtmlContent,
           };
@@ -535,7 +535,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
             guestUser,
           );
           const adminEmailOptions = {
-            to: adminEmails[0],
+            to: 'theceliacstore@gmail.com',
             subject: `🛒 New Guest Order Received - Order #${order._id}`,
             html: adminHtmlContent,
           };
@@ -753,7 +753,7 @@ const createOrder = asyncHandler(async (req, res) => {
           user.toObject(),
         );
         const adminEmailOptions = {
-          to: "farishjamal8@gmail.com", // Send to first admin (Brevo API handles single recipient)
+          to: "theceliacstore@gmail.com", // Send to first admin (Brevo API handles single recipient)
           subject: `🛒 New Order Received - Order #${order._id}`,
           html: adminHtmlContent,
         };

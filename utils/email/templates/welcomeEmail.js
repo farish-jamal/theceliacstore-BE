@@ -50,7 +50,7 @@ const generateWelcomeEmail = (user) => {
                               <table width="100%" border="0" cellpadding="0" cellspacing="0">
                                 <tr>
                                   <td align="center" valign="top" style="padding: 0px 0px 32px 0px;">
-                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                    <img src="https://theceliacstore-fe-git-main-madhav-sethis-projects.vercel.app/_next/image?url=%2F193c7e94406b9a9160b8842fcba96582.png&w=384&q=75" width="164" height="41" alt="Celic Store" 
                                          style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
                                   </td>
                                 </tr>
@@ -306,7 +306,7 @@ const generateWelcomeEmail = (user) => {
                               <table width="100%" border="0" cellpadding="0" cellspacing="0">
                                 <tr>
                                   <td align="center" valign="top" style="padding: 0px 0px 20px 0px;">
-                                    <img src="${baseUrl}/public/email-assets/celiac-brand-logo.png" width="164" height="41" alt="Celic Store" 
+                                    <img src="https://theceliacstore-fe-git-main-madhav-sethis-projects.vercel.app/_next/image?url=%2F193c7e94406b9a9160b8842fcba96582.png&w=384&q=75" width="164" height="41" alt="Celic Store" 
                                          style="display: block; width: 164px; height: auto; max-width: 100%; border: 0;" />
                                   </td>
                                 </tr>
