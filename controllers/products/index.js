@@ -523,51 +523,80 @@ const exportProducts = asyncHandler(async (req, res) => {
       },
     },
     {
+      $addFields: {
+        categoryId: { $arrayElemAt: ["$subCategoryData.category", 0] }
+      }
+    },
+    {
       $lookup: {
         from: "categories",
-        localField: "subCategoryData.category",
+        localField: "categoryId",
         foreignField: "_id",
         as: "categoryData",
+      },
+    },
+    {
+      $lookup: {
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
+        as: "brandData",
       },
     },
     {
       $addFields: {
         sub_category_name: { $arrayElemAt: ["$subCategoryData.name", 0] },
         category_name: { $arrayElemAt: ["$categoryData.name", 0] },
+        brand_name: { $arrayElemAt: ["$brandData.name", 0] },
       },
     },
     {
       $project: {
         subCategoryData: 0,
         categoryData: 0,
+        brandData: 0,
+        categoryId: 0,
       },
     },
   ]);
 
   // Flatten variants for export
   const serializedProducts = products.flatMap((p) => {
-    const { __v, _id, createdAt, updatedAt, variants, sub_category, ...rest } =
-      p;
+    const { __v, _id, createdAt, updatedAt, variants, sub_category, brand, ...rest } = p;
+    
+    // Handle price conversion more robustly
+    const handlePrice = (priceField) => {
+      if (!priceField) return priceField;
+      if (typeof priceField === 'object' && priceField.$numberDecimal) {
+        return parseFloat(priceField.$numberDecimal);
+      }
+      if (typeof priceField === 'object' && priceField.toString) {
+        return parseFloat(priceField.toString());
+      }
+      return priceField;
+    };
+
+    const baseProductData = {
+      id: p._id.toString(),
+      createdAt: createdAt?.toISOString(),
+      updatedAt: updatedAt?.toISOString(),
+      ...rest,
+      price: handlePrice(p.price),
+      discounted_price: handlePrice(p.discounted_price),
+      category_name: p.category_name || "",
+      sub_category_name: p.sub_category_name || "",
+      brand_name: p.brand_name || "",
+    };
+    
     if (Array.isArray(variants) && variants.length > 0) {
       return variants.map((variant) => ({
-        id: p._id.toString(),
-        createdAt: createdAt?.toISOString(),
-        updatedAt: updatedAt?.toISOString(),
-        ...rest,
-        category_name: p.category_name || "",
-        sub_category_name: p.sub_category_name || "",
-        variant_sku: variant.sku,
-        variant_name: variant.name,
+        ...baseProductData,
+        variant_sku: variant.sku || "",
+        variant_name: variant.name || "",
         variant_attributes: JSON.stringify(variant.attributes || {}),
-        variant_price:
-          variant.price && variant.price.$numberDecimal
-            ? parseFloat(variant.price.$numberDecimal)
-            : variant.price,
-        variant_discounted_price:
-          variant.discounted_price && variant.discounted_price.$numberDecimal
-            ? parseFloat(variant.discounted_price.$numberDecimal)
-            : variant.discounted_price,
-        variant_inventory: variant.inventory,
+        variant_price: handlePrice(variant.price),
+        variant_discounted_price: handlePrice(variant.discounted_price),
+        variant_inventory: variant.inventory || "",
         variant_images: Array.isArray(variant.images)
           ? variant.images.join("|")
           : "",
@@ -575,12 +604,7 @@ const exportProducts = asyncHandler(async (req, res) => {
     } else {
       return [
         {
-          id: p._id.toString(),
-          createdAt: createdAt?.toISOString(),
-          updatedAt: updatedAt?.toISOString(),
-          ...rest,
-          category_name: p.category_name || "",
-          sub_category_name: p.sub_category_name || "",
+          ...baseProductData,
           variant_sku: "",
           variant_name: "",
           variant_attributes: "",
