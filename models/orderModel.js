@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Counter = require("./counterModel.js");
 
 const OrderItemSchema = new mongoose.Schema({
   type: {
@@ -70,6 +71,11 @@ const OrderAddressSchema = new mongoose.Schema({
 });
 
 const OrderSchema = new mongoose.Schema({
+  orderNumber: {
+    type: Number,
+    unique: true,
+    sparse: true
+  },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -202,6 +208,18 @@ const OrderSchema = new mongoose.Schema({
     default: null
   }
 }, { timestamps: true });
+
+OrderSchema.pre("save", async function (next) {
+  if (this.isNew) {
+    const counter = await Counter.findByIdAndUpdate(
+      { _id: "orderNumber" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    this.orderNumber = counter.seq;
+  }
+  next();
+});
 
 OrderSchema.set("toJSON", {
   transform: (doc, ret) => {
