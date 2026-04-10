@@ -3,6 +3,8 @@ const ApiResponse = require("../../utils/ApiResponse.js");
 const CartService = require("../../services/cart/index.js");
 const DeliveryZoneService = require("../../services/delivery_zone/index.js");
 const Address = require("../../models/addressModel.js");
+const Product = require("../../models/productsModel.js");
+const Bundle = require("../../models/bundleModel.js");
 
 const getCart = asyncHandler(async (req, res) => {
   const user_id = req.user?._id;
@@ -35,25 +37,34 @@ const getCart = asyncHandler(async (req, res) => {
       let totalWeight = 0;
 
       for (const item of cart.items) {
-        let itemWeight = 0;
+  let itemWeight = 0;
 
-        if (item.type === "product" && item.product) {
-          // Get weight from product
-          itemWeight = item.product.weight_in_grams || 0;
-        } else if (item.type === "bundle" && item.bundle) {
-          // For bundles, calculate total weight from products in the bundle
-          if (item.bundle.products && Array.isArray(item.bundle.products)) {
-            itemWeight = item.bundle.products.reduce((sum, bundleProduct) => {
-              const productWeight = bundleProduct.product?.weight_in_grams || 0;
-              const productQty = bundleProduct.quantity || 1;
-              return sum + productWeight * productQty;
-            }, 0);
-          }
-        }
-
-        // Multiply by quantity
-        totalWeight += itemWeight * (item.quantity || 1);
+  try {
+    if (item.type === "product" && item.product) {
+      const product = await Product.findById(item.product)
+        .select("weight_in_grams")
+        .lean();
+      itemWeight = product?.weight_in_grams || 0;
+    } else if (item.type === "bundle" && item.bundle) {
+      const bundle = await Bundle.findById(item.bundle)
+        .populate({ path: "products.product", select: "weight_in_grams" })
+        .lean();
+      if (bundle?.products && Array.isArray(bundle.products)) {
+        itemWeight = bundle.products.reduce((sum, bundleProduct) => {
+          const productWeight = bundleProduct.product?.weight_in_grams || 0;
+          const productQty = bundleProduct.quantity || 1;
+          return sum + productWeight * productQty;
+        }, 0);
       }
+    }
+  } catch (weightError) {
+    // If weight lookup fails for any item, skip it — shipping will fall back to 0
+    console.error("Weight lookup failed for item:", item._id, weightError.message);
+    itemWeight = 0;
+  }
+
+  totalWeight += itemWeight * (item.quantity || 1);
+}
 
       // Calculate shipping charge if total weight is available
       if (totalWeight > 0) {
