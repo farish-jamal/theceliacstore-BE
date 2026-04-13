@@ -46,11 +46,11 @@ const exportOrders = asyncHandler(async (req, res) => {
 
     // Prepare data for XLSX
     const xlsxData = orders.map((order) => ({
-      orderId: order._id.toString(),
+      orderNumber: order.orderNumber ? `#${order.orderNumber}` : order._id.toString(),
       orderDate: order.createdAt,
       userName: order.user?.name || "",
       userEmail: order.user?.email || "",
-      userPhone: order.user?.phone || "",
+      userPhone: order.user?.phone || order.address?.mobile || order.guestInfo?.mobile || "",
       address: order.address
         ? `${order.address.address || ""}, ${order.address.city || ""}, ${order.address.state || ""}, ${order.address.pincode || ""}`
         : "",
