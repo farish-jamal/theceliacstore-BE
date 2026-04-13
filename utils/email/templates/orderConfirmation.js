@@ -191,7 +191,7 @@ const generateCustomerOrderConfirmation = (order, user) => {
                                             <tr>
                                               <td valign="top" style="padding: 0px 0px 8px 0px;">
                                                 <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
-                                                  #${order._id.toString().slice(-4).toUpperCase()} • ${orderDate}
+                                                  #${order.orderNumber || order._id.toString().slice(-4).toUpperCase()} • ${orderDate}
                                                 </div>
                                               </td>
                                             </tr>
@@ -270,7 +270,7 @@ const generateCustomerOrderConfirmation = (order, user) => {
                                 <tr>
                                   <td align="center" valign="top" style="padding: 0px 0px 24px 0px;">
                                     <div style="line-height: 128%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 16px; font-weight: normal; color: #2a1e19cc; text-align: center;">
-                                      Order number: #${order._id.toString().slice(-4).toUpperCase()}
+                                      Order number: #${order.orderNumber || order._id.toString().slice(-4).toUpperCase()}
                                     </div>
                                   </td>
                                 </tr>
@@ -606,7 +606,7 @@ const generateCompanyOrderNotification = (order, user) => {
                       <tr>
                         <td width="50%">
                           <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px;">⚡ Order ID</div>
-                          <div style="font-size: 18px; color: #78350f; font-weight: 800; font-family: 'Courier New', monospace;">#${order._id.toString().slice(-8).toUpperCase()}</div>
+                          <div style="font-size: 18px; color: #78350f; font-weight: 800; font-family: 'Courier New', monospace;">#${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}</div>
                         </td>
                         <td width="50%" align="right">
                           <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px;">💰 Total</div>
@@ -1008,7 +1008,7 @@ const generateCustomerOrderUpdate = (order, user) => {
                                             <tr>
                                               <td valign="top" style="padding: 0px 0px 8px 0px;">
                                                 <div style="line-height: 140%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 14px; font-weight: normal; color: #ffffffcc;">
-                                                  #${order._id.toString().slice(-4).toUpperCase()} • ${orderDate}
+                                                  #${order.orderNumber || order._id.toString().slice(-4).toUpperCase()} • ${orderDate}
                                                 </div>
                                               </td>
                                             </tr>
@@ -1087,7 +1087,7 @@ const generateCustomerOrderUpdate = (order, user) => {
                                 <tr>
                                   <td align="center" valign="top" style="padding: 0px 0px 24px 0px;">
                                     <div style="line-height: 128%; letter-spacing: -0px; font-family: 'Outfit', Arial, Helvetica, sans-serif; font-size: 16px; font-weight: normal; color: #2a1e19cc; text-align: center;">
-                                      Order number: #${order._id.toString().slice(-4).toUpperCase()}
+                                      Order number: #${order.orderNumber || order._id.toString().slice(-4).toUpperCase()}
                                     </div>
                                   </td>
                                 </tr>
@@ -1417,7 +1417,7 @@ const generateCompanyOrderUpdate = (order, user) => {
                       <tr>
                         <td width="50%">
                           <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px;">⚡ Order ID</div>
-                          <div style="font-size: 18px; color: #78350f; font-weight: 800; font-family: 'Courier New', monospace;">#${order._id.toString().slice(-8).toUpperCase()}</div>
+                          <div style="font-size: 18px; color: #78350f; font-weight: 800; font-family: 'Courier New', monospace;">#${order.orderNumber || order._id.toString().slice(-8).toUpperCase()}</div>
                         </td>
                         <td width="50%" align="right">
                           <div style="font-size: 11px; color: #92400e; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px;">💰 Total</div>
