@@ -487,7 +487,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
           );
           const adminEmailOptions = {
             to: 'theceliacstore@gmail.com', 
-            subject: `🛒 New Guest Order Received - Order #${order._id}`,
+            subject: `🛒 Order #${order.orderNumber} - ${new Date().toLocaleDateString('en-IN', {day: 'numeric', month: 'long', year: 'numeric'})} - ₹${order.finalTotalAmount} from ${order.address?.city}, ${order.address?.state}`,
             html: adminHtmlContent,
           };
 
@@ -536,7 +536,7 @@ const createGuestOrder = asyncHandler(async (req, res) => {
           );
           const adminEmailOptions = {
             to: 'theceliacstore@gmail.com',
-            subject: `🛒 New Guest Order Received - Order #${order._id}`,
+            subject: `🛒 Order #${order.orderNumber} - ${new Date().toLocaleDateString('en-IN', {day: 'numeric', month: 'long', year: 'numeric'})} - ₹${order.finalTotalAmount} from ${order.address?.city}, ${order.address?.state}`,
             html: adminHtmlContent,
           };
 
@@ -754,7 +754,7 @@ const createOrder = asyncHandler(async (req, res) => {
         );
         const adminEmailOptions = {
           to: "theceliacstore@gmail.com", // Send to first admin (Brevo API handles single recipient)
-          subject: `🛒 New Order Received - Order #${order._id}`,
+          subject: `🛒 Order #${order.orderNumber} - ${new Date().toLocaleDateString('en-IN', {day: 'numeric', month: 'long', year: 'numeric'})} - ₹${order.finalTotalAmount} from ${order.address?.city}, ${order.address?.state}`,
           html: adminHtmlContent,
         };
 
