@@ -102,6 +102,10 @@ const ProductSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    celiacFriendly: {
+      type: Boolean,
+      default: false,
+    },
     sub_category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SubCategory",
