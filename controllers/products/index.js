@@ -471,6 +471,61 @@ const bulkCreateProducts = asyncHandler(async (req, res) => {
     .json(new ApiResponse(207, result, "Batch processing completed", true));
 });
 
+const bulkUpdateProducts = asyncHandler(async (req, res) => {
+  const { productIds, updates } = req.body;
+
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "productIds must be a non-empty array", false));
+  }
+
+  // Validate all IDs are valid ObjectIds
+  const invalidIds = productIds.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidIds.length > 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, `Invalid product IDs: ${invalidIds.join(", ")}`, false));
+  }
+
+  if (!updates || typeof updates !== "object" || Object.keys(updates).length === 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "updates must be a non-empty object", false));
+  }
+
+  // Only allow status and inventory fields
+  const allowedFields = ["status", "inventory"];
+  const updateKeys = Object.keys(updates);
+  const disallowedKeys = updateKeys.filter((k) => !allowedFields.includes(k));
+  if (disallowedKeys.length > 0) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, `Disallowed fields: ${disallowedKeys.join(", ")}. Only status and inventory are allowed.`, false));
+  }
+
+  // Validate field values
+  if (updates.status !== undefined && !["published", "draft"].includes(updates.status)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "status must be 'published' or 'draft'", false));
+  }
+  if (updates.inventory !== undefined && ![0, 1].includes(updates.inventory)) {
+    return res
+      .status(400)
+      .json(new ApiResponse(400, null, "inventory must be 0 or 1", false));
+  }
+
+  const result = await Product.updateMany(
+    { _id: { $in: productIds } },
+    { $set: updates }
+  );
+
+  res.json(
+    new ApiResponse(200, { updated: result.modifiedCount, productIds }, "Products updated successfully", true)
+  );
+});
+
 const os = require("os");
 const path = require("path");
 const fs = require("fs/promises");
@@ -692,6 +747,7 @@ const generateSampleFile = asyncHandler(async (req, res) => {
       is_best_seller: "Is Best Seller (Optional) - 'true' or 'false'",
       is_imported_picks: "Is Imported Picks (Optional) - 'true' or 'false'",
       is_bakery: "Is Bakery (Optional) - 'true' or 'false'",
+      celiacFriendly: "Celiac Friendly (Optional) - 'true' or 'false'",
       sub_category: `Sub Category (Required) - Select from: ${subCategoryOptions}`,
       category: `Category (Optional) - Select from: ${categoryOptions}`,
       manufacturer: "Manufacturer (Optional)",
@@ -818,6 +874,7 @@ const generateSampleFile = asyncHandler(async (req, res) => {
           is_best_seller: "Is Best Seller (Optional) - 'true' or 'false'",
           is_imported_picks: "Is Imported Picks (Optional) - 'true' or 'false'",
           is_bakery: "Is Bakery (Optional) - 'true' or 'false'",
+          celiacFriendly: "Celiac Friendly (Optional) - 'true' or 'false'",
           sub_category: `Sub Category (Required) - Select from: ${subCategoryIds.join(
             " | "
           )}`,
@@ -848,6 +905,7 @@ const generateSampleFile = asyncHandler(async (req, res) => {
           is_best_seller: "",
           is_imported_picks: "",
           is_bakery: "",
+          celiacFriendly: "",
           sub_category: "",
           category: "",
           manufacturer: "",
@@ -1183,6 +1241,7 @@ module.exports = {
   checkProductPurchased,
   getProductsByAdmin,
   bulkCreateProducts,
+  bulkUpdateProducts,
   exportProducts,
   generateSampleFile,
   migrateProductImagesToCloudinary,

@@ -540,8 +540,8 @@ const getProductRecommendations = async (productId, options = {}) => {
 };
 
 const bulkCreateProducts = async (products, adminId) => {
-  const results = { success: [], failed: [] };
-  const BATCH_SIZE = 100; // Process in batches of 100
+  const results = { success: [], updated: [], failed: [], flagged: [] };
+  const BATCH_SIZE = 100;
 
   try {
     // Pre-fetch all subcategories and brands to reduce database queries
@@ -555,7 +555,7 @@ const bulkCreateProducts = async (products, adminId) => {
         { name: { $in: subCategoryNames.filter(name => !mongoose.Types.ObjectId.isValid(name)) } }
       ]
     });
-    
+
     const subCategoryMap = new Map();
     subCategories.forEach(sc => {
       subCategoryMap.set(sc._id.toString(), sc._id);
@@ -566,37 +566,57 @@ const bulkCreateProducts = async (products, adminId) => {
     const brands = await Brand.find({
       name: { $in: brandNames }
     });
-    
+
     const brandMap = new Map();
     brands.forEach(brand => {
       brandMap.set(brand.name.toLowerCase(), brand._id);
     });
 
-    // Get existing SKUs to check for duplicates
-    const existingSkus = await Product.find({}, 'sku').lean();
-    const existingSkuSet = new Set(existingSkus.map(p => p.sku));
+    // Get existing SKUs mapped to product IDs for upsert
+    const existingSkuProducts = await Product.find({}, 'sku').lean();
+    const existingSkuSet = new Set(existingSkuProducts.map(p => p.sku));
+    const existingSkuToId = new Map(existingSkuProducts.map(p => [p.sku, p._id]));
 
-    // Get existing products for duplicate checking
-    const existingProducts = await Product.find({
-      $or: brandNames.map(name => ({ brand: brandMap.get(name.toLowerCase()) })).filter(Boolean)
-    }, 'name brand').lean();
-    
-    const existingProductSet = new Set(
-      existingProducts.map(p => `${p.name.toLowerCase()}_${p.brand}`)
-    );
+    // Snapshot all live product SKUs before processing (for flagging)
+    const liveProducts = await Product.find({ status: 'published' }, 'sku').lean();
+    const liveSkuSet = new Set(liveProducts.map(p => p.sku));
+
+    // Track SKUs seen in this upload
+    const uploadSkuSet = new Set();
 
     // Process products in batches
     for (let i = 0; i < products.length; i += BATCH_SIZE) {
       const batch = products.slice(i, i + BATCH_SIZE);
-      const batchResults = await processBatch(batch, i, adminId, subCategoryMap, brandMap, existingSkuSet, existingProductSet);
-      
+      const batchResults = await processBatch(batch, i, adminId, subCategoryMap, brandMap, existingSkuSet, existingSkuToId, uploadSkuSet);
+
       results.success.push(...batchResults.success);
+      results.updated.push(...batchResults.updated);
       results.failed.push(...batchResults.failed);
+    }
+
+    // Find flagged products: live products whose SKU was NOT in the upload
+    const missingLiveSkus = [...liveSkuSet].filter(sku => !uploadSkuSet.has(sku));
+    if (missingLiveSkus.length > 0) {
+      const flaggedProducts = await Product.find(
+        { sku: { $in: missingLiveSkus } },
+        '_id name sku status inventory brand sub_category'
+      )
+        .populate('brand', 'name')
+        .populate('sub_category', 'name')
+        .lean();
+      results.flagged = flaggedProducts.map(p => ({
+        _id: p._id,
+        name: p.name,
+        sku: p.sku,
+        status: p.status,
+        inventory: p.inventory,
+        brand: p.brand ? { name: p.brand.name } : null,
+        sub_category: p.sub_category ? { name: p.sub_category.name } : null,
+      }));
     }
 
   } catch (error) {
     console.error('Bulk create error:', error);
-    // If there's a major error, mark all products as failed
     products.forEach((product, index) => {
       results.failed.push({
         index,
@@ -609,19 +629,14 @@ const bulkCreateProducts = async (products, adminId) => {
   return results;
 };
 
-const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap, existingSkuSet, existingProductSet) => {
-  const results = { success: [], failed: [] };
-  const validProducts = [];
+const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap, existingSkuSet, existingSkuToId, uploadSkuSet) => {
+  const results = { success: [], updated: [], failed: [] };
+  const newProducts = [];
 
   for (const [batchIndex, productData] of batch.entries()) {
     const originalIndex = startIndex + batchIndex;
-    
-    try {
-      // Skip template rows
-      // if (isTemplateRow(productData)) {
-      //   continue;
-      // }
 
+    try {
       // Check required fields
       if (!productData.name || !productData.price || !productData.sub_category) {
         throw new Error("Missing required fields (name, price, or sub_category)");
@@ -642,9 +657,8 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
       // Find brand using pre-fetched data
       const brandName = productData.brand || productData.manufacturer;
       let brandId = brandMap.get(brandName?.toLowerCase());
-      
+
       if (!brandId && brandName) {
-        // Create missing brand
         const newBrand = new Brand({ name: brandName, is_active: true });
         const savedBrand = await newBrand.save();
         brandId = savedBrand._id;
@@ -667,18 +681,10 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
         skuValue = await generateSku(productData.name, brandNameForSku, subCategoryNameForSku);
       }
 
-      // Check for existing SKU using pre-fetched data
-      if (existingSkuSet.has(skuValue)) {
-        throw new Error(`Duplicate SKU: Product with SKU "${skuValue}" already exists.`);
-      }
+      // Track this SKU as seen in the upload
+      uploadSkuSet.add(skuValue);
 
-      // Check for existing product using pre-fetched data
-      const productKey = `${productData.name.toLowerCase()}_${brandId}`;
-      if (existingProductSet.has(productKey)) {
-        throw new Error(`Duplicate product: Product with name "${productData.name}" and brand already exists.`);
-      }
-
-      // Process the product data
+      // Build the processed product fields
       const processedProduct = { ...productData };
 
       // Process price fields
@@ -732,13 +738,14 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
       processedProduct.is_best_seller = processBooleanField(productData, 'is_best_seller');
       processedProduct.is_imported_picks = processBooleanField(productData, 'is_imported_picks');
       processedProduct.is_bakery = processBooleanField(productData, 'is_bakery');
+      processedProduct.celiacFriendly = processBooleanField(productData, 'celiacFriendly');
 
       // Clean up redundant fields
       Object.keys(processedProduct).forEach(key => {
         if (key.startsWith('photo_links') || key.toLowerCase().includes('photo')) {
           delete processedProduct[key];
         }
-        if (key.toLowerCase().includes('published') || 
+        if (key.toLowerCase().includes('published') ||
             key.toLowerCase().includes('draft') ||
             key.includes('published_/_draft') ||
             key.includes('published/draft')) {
@@ -774,14 +781,30 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
         throw new Error("Discounted price cannot be higher than regular price");
       }
 
-      // Store original index separately for tracking
-      const productWithIndex = {
-        ...processedProduct,
-        created_by_admin: adminId,
-        originalIndex: originalIndex,
-      };
-      
-      validProducts.push(productWithIndex);
+      // UPSERT: if SKU exists, update; otherwise create
+      if (existingSkuSet.has(skuValue)) {
+        const existingId = existingSkuToId.get(skuValue);
+        // Build update fields — do NOT overwrite created_by_admin or createdAt
+        const { created_by_admin, createdAt, sku, ...updateFields } = processedProduct;
+
+        await Product.findByIdAndUpdate(existingId, { $set: updateFields });
+        results.updated.push({
+          index: originalIndex,
+          _id: existingId,
+          name: processedProduct.name,
+          sku: skuValue,
+        });
+      } else {
+        // New product — queue for batch insert
+        const productWithIndex = {
+          ...processedProduct,
+          created_by_admin: adminId,
+          originalIndex: originalIndex,
+        };
+        newProducts.push(productWithIndex);
+        // Add to set so later rows in same batch can detect it
+        existingSkuSet.add(skuValue);
+      }
 
     } catch (error) {
       results.failed.push({
@@ -792,32 +815,29 @@ const processBatch = async (batch, startIndex, adminId, subCategoryMap, brandMap
     }
   }
 
-  // Insert valid products in this batch
-  if (validProducts.length > 0) {
+  // Insert new products in this batch
+  if (newProducts.length > 0) {
     try {
-      // Remove originalIndex field before insertion to avoid validation errors
-      const productsForInsert = validProducts.map(({ originalIndex, ...product }) => product);
-      
+      const productsForInsert = newProducts.map(({ originalIndex, ...product }) => product);
+
       const insertedProducts = await ProductsRepository.bulkCreateProducts(productsForInsert);
-      
-      // Map inserted products back to their original indices
+
       results.success = insertedProducts.map((product, i) => ({
-        index: validProducts[i].originalIndex,
+        index: newProducts[i].originalIndex,
         _id: product._id,
         name: product.name,
         sku: product.sku,
       }));
 
-      // Add new SKUs to existing set for next batches
+      // Add new SKUs to lookup maps for subsequent batches
       insertedProducts.forEach(product => {
-        existingSkuSet.add(product.sku);
+        existingSkuToId.set(product.sku, product._id);
       });
 
     } catch (error) {
       console.error('Batch insert error:', error);
-      
-      // If batch insert fails, add all valid products in this batch to failed list
-      validProducts.forEach(validProduct => {
+
+      newProducts.forEach(validProduct => {
         results.failed.push({
           index: validProduct.originalIndex,
           name: validProduct.name,

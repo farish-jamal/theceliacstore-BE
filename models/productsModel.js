@@ -52,7 +52,9 @@ const ProductSchema = new mongoose.Schema(
     inventory: {
       type: Number,
       default: 0,
+      enum: [0, 1],
       min: 0,
+      max: 1,
     },
     status: {
       type: String,

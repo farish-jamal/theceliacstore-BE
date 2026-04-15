@@ -23,5 +23,6 @@ router.get("/:id", ProductController.getProductById);
 router.put("/:id", adminOrSuperAdmin, upload.any(), ProductController.updateProduct);
 router.delete("/:id", adminOrSuperAdmin, ProductController.deleteProduct);
 router.post("/bulk", adminOrSuperAdmin, ProductController.bulkCreateProducts);
+router.patch("/bulk-update", adminOrSuperAdmin, ProductController.bulkUpdateProducts);
 
 module.exports = router;
